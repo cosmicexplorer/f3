@@ -1,5 +1,5 @@
-f3
-==
+f<sup>3</sup>
+=============
 
 The Fantastic File Finder, for emacs.
 
