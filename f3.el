@@ -1,4 +1,4 @@
-;;; f3.el --- helm interface for searching files really fast
+;;; f3.el --- helm interface for searching files really fast -*- lexical-binding: t -*-
 
 ;; Keywords: find, files, helm
 
@@ -54,7 +54,7 @@
       (error (format "%s %S" "invalid mode" mode)))))
 
 (defun f3-maybe-lowercase-generate (base pat)
-  (let ((cleaned-pat (replace-regexp-in-string "\"" "" pat)))
+  (let ((cleaned-pat (shell-quote-argument pat)))
     ;; we generate base, so no injection
     (if (string-match-p "[[:upper:]]" cleaned-pat)
         (format "-%s \"%s\"" base cleaned-pat)
@@ -114,21 +114,36 @@
 ;;; TODO: defcustom this
 (defconst f3-find-program "find")
 
-(defun f3-do (dir cur-cmd paren-stack)
-  "CUR-CMD is a list of parsed arguments, not plain text."
-  ;; turn current pattern into something for find, if non-blank
+(defvar-local f3-find-directory nil)
+
+(defvar-local f3-current-command nil)
+(defvar-local f3-current-paren-stack nil)
+(defvar-local f3-find-command-string nil)
+
+(defun f3-make-process ()
   (let* ((current-pattern
           (unless (string-empty-p helm-pattern)
             (f3-pattern-to-parsed-arg
              helm-pattern f3-current-mode f3-current-complement)))
-         (combined-pattern (list f3-current-combinator cur-cmd current-pattern))
+         (combined-pattern
+          (when (or cur-cmd current-pattern)
+            (list f3-current-combinator cur-cmd current-pattern)))
          (complete-pattern
-          (f3-close-parens-to-make-command combined-pattern paren-stack))
-         (find-cmd
-          (format "%s \"%s\" %s"
-                  f3-find-program dir (f3-parsed-to-command complete-pattern))))
-    ;; TODO: run helm with find as an async source!
-    ))
+          (f3-close-parens-to-make-command combined-pattern paren-stack)))
+    (message "PAT: %S" complete-pattern)
+    (when complete-pattern
+      (let* ((find-cmd
+              (format "%s \"%s\" %s"
+                      f3-find-program f3-find-directory
+                      (f3-parsed-to-command complete-pattern)))
+             (find-process
+              (start-process-shell-command
+               "*f3-find*" "*f3-find-output*" find-cmd)))))))
+
+(defvar f3-find-source
+  (helm-build-async-source "f3 find"
+    :candidates-process 'f3-make-process
+    :candidate-number-limit 9999))
 
 ;;; TODO: make defcustom for f3's default directory
 
@@ -136,11 +151,13 @@
 (defun f3 (start-dir)
   (interactive (list default-directory))
   ;; in case user modifies defcustoms after this file is loaded
-  (setq-local
+  (setq
    f3-current-combinator f3-default-combinator
    f3-current-mode f3-default-mode
-   f3-current-complement f3-default-complement)
-  (f3-do ))
+   f3-current-complement f3-default-complement
+   ;; TODO: get the right directory
+   f3-find-directory start-dir)
+  (helm :sources '(f3-find-source) :buffer "*f3*"))
 
 (provide 'f3)
 ;;; f3.el ends here
