@@ -12,17 +12,20 @@
 ;;; functions to parse patterns into an AST
 ;;; TODO: defcustom for default input mode, and persist across combinators
 (defconst f3-input-modes
-  '((text . f3-create-text-pattern)
-    (regex . f3-create-regex-pattern)
-    (find . f3-create-find-pattern)
-    (filetype . f3-create-filetype-pattern))
+  '((:text . f3-create-text-pattern)
+    (:regex . f3-create-regex-pattern)
+    (:find . f3-create-find-pattern)
+    (:filetype . f3-create-filetype-pattern))
   "Modes which interpret the current `helm-pattern' differently.")
 
 (defun f3-create-text-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
     (cl-reduce
      (lambda (parsed1 parsed2) (list :and parsed1 parsed2))
-     (cl-mapcar (lambda (pat) (list :text pat)) texts))))
+     (cl-mapcar
+      (lambda (pat)
+        (list :text (format "*%s*" pat)))
+      texts))))
 
 (defun f3-create-regex-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
@@ -48,17 +51,15 @@
   (if do-complement (list :not ast) ast))
 
 (defun f3-pattern-to-parsed-arg (pattern mode complement)
-  (let ((process-input-fn (assoc mode f3-input-modes)))
+  (let ((process-input-fn (cdr (assoc mode f3-input-modes))))
     (if process-input-fn
         (f3-do-complement (funcall process-input-fn pattern) complement)
       (error (format "%s %S" "invalid mode" mode)))))
 
 (defun f3-maybe-lowercase-generate (base pat)
-  (let ((cleaned-pat (shell-quote-argument pat)))
-    ;; we generate base, so no injection
-    (if (string-match-p "[[:upper:]]" cleaned-pat)
-        (format "-%s \"%s\"" base cleaned-pat)
-      (format "-i%s \"%s\"" base cleaned-pat))))
+  (if (string-match-p "[[:upper:]]" pat)
+      (format "-%s \"%s\"" base pat)
+    (format "-i%s \"%s\"" base pat)))
 
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
@@ -121,28 +122,43 @@
 (defvar-local f3-find-command-string nil)
 
 (defun f3-make-process ()
+  (setq f3-find-directory default-directory)
   (let* ((current-pattern
           (unless (string-empty-p helm-pattern)
             (f3-pattern-to-parsed-arg
              helm-pattern f3-current-mode f3-current-complement)))
          (combined-pattern
-          (when (or cur-cmd current-pattern)
-            (list f3-current-combinator cur-cmd current-pattern)))
+          (if f3-current-command
+              (if current-pattern
+                  (list f3-current-combinator f3-current-command
+                        current-pattern)
+                f3-current-command)
+            current-pattern))
          (complete-pattern
-          (f3-close-parens-to-make-command combined-pattern paren-stack)))
-    (message "PAT: %S" complete-pattern)
+          (f3-close-parens-to-make-command
+           combined-pattern f3-current-paren-stack)))
     (when complete-pattern
       (let* ((find-cmd
               (format "%s \"%s\" %s"
-                      f3-find-program f3-find-directory
+                      f3-find-program (file-relative-name f3-find-directory)
                       (f3-parsed-to-command complete-pattern)))
              (find-process
-              (start-process-shell-command
-               "*f3-find*" "*f3-find-output*" find-cmd)))))))
+              (progn
+                (message "DIR: %S" f3-find-directory)
+                (message "CMD: %S" find-cmd)
+                (let ((proc
+                       (start-process-shell-command
+                        "*f3-find*" "*f3-find-output*" find-cmd)))
+                  (set-process-sentinel
+                   proc
+                   (lambda (pr ev)
+                     (helm-process-deferred-sentinel-hook
+                      pr ev (helm-default-directory))))
+                  proc))))))))
 
-(defvar f3-find-source
+(setq f3-find-source
   (helm-build-async-source "f3 find"
-    :candidates-process 'f3-make-process
+    :candidates-process #'f3-make-process
     :candidate-number-limit 9999))
 
 ;;; TODO: make defcustom for f3's default directory
@@ -156,8 +172,9 @@
    f3-current-mode f3-default-mode
    f3-current-complement f3-default-complement
    ;; TODO: get the right directory
-   f3-find-directory start-dir)
-  (helm :sources '(f3-find-source) :buffer "*f3*"))
+   f3-find-directory (file-relative-name start-dir))
+  (helm :sources '(f3-find-source) :buffer "*f3*"
+        :default-directory f3-find-directory))
 
 (provide 'f3)
 ;;; f3.el ends here
