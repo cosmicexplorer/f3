@@ -22,4 +22,4 @@
 
 ;;; don't forget to read the find man page about optimization levels
 
-(provide 'helm-file-finder)
+(provide 'f3)
