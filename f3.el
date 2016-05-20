@@ -93,7 +93,6 @@
   (f3-do dir nil (cons (list f3-current-combinator cur-cmd) paren-stack)
          f3-current-combinator f3-current-mode))
 
-
 (defun f3-close-paren (dir cur-cmd paren-stack)
   (let ((cur-paren (car paren-stack))
         (upper (cdr paren-stack)))

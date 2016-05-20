@@ -19,19 +19,19 @@ Find files fast, using helm. It'll be cool, trust me.
     - `find . \( -name "*a*" \) -and \( -name "*b*" \)` for `helm-pattern` = `a b`
 - bust out keybindings for set intersections and then running commands
 - these keybindings interpret the current pattern as an "and" pattern as shown above and then clear `helm-pattern` to eventually build a `find` command line
-    - combinators
+    - combinators: these set `f3-current-combinator`, take the current pattern as word, and reset helm
         - <kbd>M-o</kbd> = union ("or")
         - <kbd>M-a</kbd> = intersection ("and")
-    - groupings
+    - groupings: these call `f3-(open/close)-paren` and reset helm
         - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
         - <kbd>M-)</kbd> = close paren
-    - modes
+    - modes: these do NOT reset helm, just change `f3-current-mode`
         - <kbd>M-r</kbd> = regex mode
         - <kbd>M-n</kbd> = normal text mode (not regex mode)
         - <kbd>M-f</kbd> = "find" mode (just input raw find arguments)
         - <kbd>M-f</kbd> = filetype (`b|c|d|f|l|p|s`)
             - explode if not recognized
-    - modifiers
+    - modifiers: these change `f3-current-complement` and do NOT reset helm
         - <kbd>M-c</kbd> = toggle complement (current)
     - actions
         - <kbd>M-g</kbd> = run command on results in new `*Async Shell Command*` buffer and close helm
