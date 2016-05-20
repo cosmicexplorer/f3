@@ -27,11 +27,13 @@ Find files fast, using helm. It'll be cool, trust me.
     - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
     - <kbd>M-)</kbd> = close paren
     - <kbd>M-g</kbd> = run command on results in new `*Async Shell Command*` buffer and close helm
+    - <kbd>M-l</kbd> = list the files in a dired buffer and exit
     - <kbd>M-f</kbd> = prompt for filetype (`b|c|d|f|l|p|s`)
     - <kbd>M-p</kbd> = start search from project root
     - <kbd>M-d</kbd> = start search from initial choice of  `default-directory`
     - <kbd>M-f</kbd> = choose directory to search from, starting at whatever the current choice is
     - <kbd>M-j</kbd> = start searching a directory up
+    - <kbd>M-z</kbd> = undo whatever was just done
 - otherwise, pressing <kbd>RET</kbd> on a result visits it, and <kbd>TAB</kbd> previews it
 
 # License
