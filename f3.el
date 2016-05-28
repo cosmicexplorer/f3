@@ -62,8 +62,8 @@
 ;;; TODO: do i?wholename and friends as well
 (defun f3-maybe-lowercase-generate (base pat)
   (if (string-match-p "[[:upper:]]" pat)
-      (list (format "-%s" base) (format "\"%s\"" pat))
-    (list (format "-i%s" base) (format "\"%s\"" pat))))
+      (list (format "-%s" base) pat)
+    (list (format "-i%s" base) pat)))
 
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
@@ -71,16 +71,16 @@
     ;; operators
     (`(:and . ,args)
      (cl-reduce (lambda (arg1 arg2)
-                  (append (list "\\(") arg1 (list "\\)" "-and")
-                          (list "\\(") arg2 (list "\\)")))
+                  (append (list "(") arg1 (list ")" "-and")
+                          (list "(") arg2 (list ")")))
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:or . ,args)
      (cl-reduce (lambda (arg1 arg2)
-                  (append (list "\\(") arg1 (list "\\)" "-or")
-                          (list "\\(") arg2 (list "\\)")))
+                  (append (list "(") arg1 (list ")" "-or")
+                          (list "(") arg2 (list ")")))
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:not ,thing)
-     (append (list "-not" "\\(") (f3-parsed-to-command thing) (list "\\)")))
+     (append (list "-not" "(") (f3-parsed-to-command thing) (list ")")))
     ;; modes
     (`(:text ,thing) (f3-maybe-lowercase-generate "name" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
@@ -91,11 +91,11 @@
 (defcustom f3-default-combinator :and
   "Default combinator for multiple `f3' patterns."
   :group 'f3)
-(defvar-local f3-current-combinator f3-default-combinator)
+(defvar f3-current-combinator f3-default-combinator)
 (defcustom f3-default-mode :text
   "Default input mode for `f3' patterns."
   :group 'f3)
-(defvar-local f3-current-mode f3-default-mode)
+(defvar f3-current-mode f3-default-mode)
 
 ;;; TODO: restart `helm-pattern' with whatever was in it before `f3-open-paren'
 ;;; or `f3-close-paren' was called, after calling it
@@ -117,20 +117,18 @@
    paren-stack
    :initial-value cur-cmd))
 
-(defvar-local f3-current-complement nil)
+(defvar f3-current-complement nil)
 
 (defcustom f3-find-program "find"
   "Default command to find files with using `f3'."
   :group 'f3)
 
-(defvar-local f3-find-directory nil)
-
-(defvar-local f3-current-command nil)
-(defvar-local f3-current-paren-stack nil)
-(defvar-local f3-find-command-string nil)
+(defvar f3-find-directory nil)
+(defvar f3-current-command nil)
 
 (defconst f3-proc-name "*f3-find*")
 (defconst f3-buf-name "*f3-find-output*")
+(defconst f3-err-buf-name "*f3-errors*")
 
 (defun f3-make-process ()
   (let* ((current-pattern
@@ -145,20 +143,18 @@
                 f3-current-command)
             current-pattern))
          (complete-pattern
-          (f3-close-parens-to-make-command
-           combined-pattern f3-current-paren-stack)))
+          (f3-close-parens-to-make-command combined-pattern nil)))
     (when complete-pattern
-      (let* ((find-dir (file-relative-name f3-find-directory))
-             (args-list (cons find-dir (f3-parsed-to-command complete-pattern)))
-             (proc (start-process
-                    f3-proc-name f3-buf-name f3-find-program args-list)))
-        ;; this is why lexical-binding is set to t
-        (set-process-sentinel
-         proc
-         (lambda (pr ev)
-           (helm-process-deferred-sentinel-hook
-            pr ev (helm-default-directory))))
-        proc))))
+      (let* ((find-dir
+              (file-relative-name f3-find-directory))
+             (args-list (cons find-dir (f3-parsed-to-command complete-pattern))))
+        (progn
+          (message "args: %S" args-list)
+          (make-process
+           :name f3-proc-name
+           :buffer f3-buf-name
+           :command (cons f3-find-program args-list)
+           :stderr f3-err-buf-name))))))
 
 (defconst f3-async-candidate-limit 2000)
 
@@ -190,7 +186,8 @@
    f3-current-combinator f3-default-combinator
    f3-current-mode f3-default-mode
    f3-current-complement nil            ; no complement at start
-   f3-find-directory start-dir)
+   f3-find-directory start-dir
+   f3-current-command nil)
   (helm :sources '(f3-find-process-source) :buffer f3-helm-buffer-name))
 
 (provide 'f3)
