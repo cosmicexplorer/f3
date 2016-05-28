@@ -12,12 +12,15 @@
 (defgroup f3 nil
   "Group for `f3' customizations.")
 
+;;; TODO: ignore commonly ignored files/folders (.git, anything in .gitignore,
+;;; etc)
+
 ;;; functions to parse patterns into an AST
 ;;; TODO: persist input mode across combinators
 (defconst f3-input-modes
   '((:text . f3-create-text-pattern)
     (:regex . f3-create-regex-pattern)
-    (:find . f3-create-find-pattern)
+    (:raw . f3-create-raw-pattern)
     (:filetype . f3-create-filetype-pattern))
   "Modes which interpret the current `helm-pattern' differently.")
 
@@ -43,7 +46,7 @@
               `(:not (:regex ,real-reg))))))
       texts))))
 
-(defun f3-create-find-pattern (pat)
+(defun f3-create-raw-pattern (pat)
   "Assumes correctness of pattern PAT."
   (let ((split-pattern
          (cl-mapcar
@@ -93,6 +96,7 @@
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:not ,thing)
      (append (list "-not" "(") (f3-parsed-to-command thing) (list ")")))
+    (`(:paren ,thing) (append (list "(") thing (list ")")))
     ;; modes
     (`(:text ,thing) (f3-maybe-lowercase-generate "name" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
@@ -207,15 +211,26 @@
 
 (defconst f3-helm-buffer-name "*f3*")
 
-(defun f3-do (start-dir prev-cmd)
+(defvar f3-last-selected-candidate nil)
+
+(defun f3-do (start-dir prev-cmd &optional initial-input)
   (setq f3-find-directory start-dir
         f3-current-command prev-cmd
         f3-buffer-matcher nil)
   ;; FIXME remove all red matches from `helm-highlight-current-line'; all on
   ;; current line still remain
   (let ((helm-highlight-matches-around-point-max-lines nil))
-    (helm :sources '(f3-find-process-source f3-buffer-source)
-          :buffer f3-helm-buffer-name)))
+    (setq f3-last-selected-candidate
+          (buffer-name
+           (helm :sources '(f3-find-process-source f3-buffer-source)
+                 :buffer f3-helm-buffer-name
+                 :input (or initial-input "")
+                 :preselect
+                 (if (buffer-live-p (get-buffer f3-last-selected-candidate))
+                     f3-last-selected-candidate
+                   nil)
+                 :prompt (format
+                          "%s: " (substring (symbol-name f3-current-mode) 1)))))))
 
 ;;;###autoload
 (defun f3 (start-dir)
