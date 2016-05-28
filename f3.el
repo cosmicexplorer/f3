@@ -9,8 +9,11 @@
 (require 'cl-lib)
 (require 'helm)
 
+(defgroup f3 nil
+  "Group for `f3' customizations.")
+
 ;;; functions to parse patterns into an AST
-;;; TODO: defcustom for default input mode, and persist across combinators
+;;; TODO: persist input mode across combinators
 (defconst f3-input-modes
   '((:text . f3-create-text-pattern)
     (:regex . f3-create-regex-pattern)
@@ -42,7 +45,7 @@
 
 (defun f3-create-filetype-pattern (pat)
   (unless (member pat f3-valid-filetype-patterns)
-    (error (format "%s %s" "invalid filetype pattern" pat)))
+    (user-error (format "%s '%s'" "invalid filetype pattern" pat)))
   (list :filetype pat))
 
 (defconst f3-combinators '(:and :or))
@@ -54,38 +57,44 @@
   (let ((process-input-fn (cdr (assoc mode f3-input-modes))))
     (if process-input-fn
         (f3-do-complement (funcall process-input-fn pattern) complement)
-      (error (format "%s %S" "invalid mode" mode)))))
+      (user-error (format "%s '%S'" "invalid mode" mode)))))
 
+;;; TODO: do i?wholename and friends as well
 (defun f3-maybe-lowercase-generate (base pat)
   (if (string-match-p "[[:upper:]]" pat)
-      (format "-%s \"%s\"" base pat)
-    (format "-i%s \"%s\"" base pat)))
+      (list (format "-%s" base) (format "\"%s\"" pat))
+    (list (format "-i%s" base) (format "\"%s\"" pat))))
 
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
   (pcase parsed-args
     ;; operators
     (`(:and . ,args)
-     (cl-reduce (lambda (str1 str2) (format "\\( %s \\) -and \\( %s \\)"
-                                            str1 str2))
+     (cl-reduce (lambda (arg1 arg2)
+                  (append (list "\\(") arg1 (list "\\)" "-and")
+                          (list "\\(") arg2 (list "\\)")))
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:or . ,args)
-     (cl-reduce (lambda (str1 str2) (format "\\( %s \\) -or \\( %s \\)"
-                                            str1 str2))
+     (cl-reduce (lambda (arg1 arg2)
+                  (append (list "\\(") arg1 (list "\\)" "-or")
+                          (list "\\(") arg2 (list "\\)")))
                 (cl-mapcar #'f3-parsed-to-command args)))
-    (`(:not ,thing) (format "-not \\( %s \\)") (f3-parsed-to-command thing))
+    (`(:not ,thing)
+     (append (list "-not" "\\(") (f3-parsed-to-command thing) (list "\\)")))
     ;; modes
     (`(:text ,thing) (f3-maybe-lowercase-generate "name" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
-    (`(:raw ,thing) thing)
-    (`(:filetype ,thing) (format "-type %s" thing))
-    (_  parsed-args)))
+    (`(:raw ,thing) (helm-mm-split-pattern thing))
+    (`(:filetype ,thing) (list "-type" thing))
+    (_ parsed-args)))
 
-;;; TODO: defcustom this
-(defconst f3-default-combinator :and)
+(defcustom f3-default-combinator :and
+  "Default combinator for multiple `f3' patterns."
+  :group 'f3)
 (defvar-local f3-current-combinator f3-default-combinator)
-;;; TODO: defcustom this
-(defconst f3-default-mode :text)
+(defcustom f3-default-mode :text
+  "Default input mode for `f3' patterns."
+  :group 'f3)
 (defvar-local f3-current-mode f3-default-mode)
 
 ;;; TODO: restart `helm-pattern' with whatever was in it before `f3-open-paren'
@@ -108,18 +117,20 @@
    paren-stack
    :initial-value cur-cmd))
 
-;;; TODO: defcustom this
-(defconst f3-default-complement nil)
-(defvar-local f3-current-complement f3-default-complement)
+(defvar-local f3-current-complement nil)
 
-;;; TODO: defcustom this
-(defconst f3-find-program "find")
+(defcustom f3-find-program "find"
+  "Default command to find files with using `f3'."
+  :group 'f3)
 
 (defvar-local f3-find-directory nil)
 
 (defvar-local f3-current-command nil)
 (defvar-local f3-current-paren-stack nil)
 (defvar-local f3-find-command-string nil)
+
+(defconst f3-proc-name "*f3-find*")
+(defconst f3-buf-name "*f3-find-output*")
 
 (defun f3-make-process ()
   (setq f3-find-directory default-directory)
@@ -138,30 +149,31 @@
           (f3-close-parens-to-make-command
            combined-pattern f3-current-paren-stack)))
     (when complete-pattern
-      (let* ((find-cmd
-              (format "%s \"%s\" %s"
-                      f3-find-program (file-relative-name f3-find-directory)
-                      (f3-parsed-to-command complete-pattern)))
-             (find-process
-              (progn
-                (message "DIR: %S" f3-find-directory)
-                (message "CMD: %S" find-cmd)
-                (let ((proc
-                       (start-process-shell-command
-                        "*f3-find*" "*f3-find-output*" find-cmd)))
-                  (set-process-sentinel
-                   proc
-                   (lambda (pr ev)
-                     (helm-process-deferred-sentinel-hook
-                      pr ev (helm-default-directory))))
-                  proc))))))))
+      (let* ((find-dir (file-relative-name f3-find-directory))
+             (args-list (cons find-dir (f3-parsed-to-command complete-pattern)))
+             (proc (start-process
+                    f3-proc-name f3-buf-name f3-find-program args-list)))
+        ;; this is why lexical-binding is set to t
+        (set-process-sentinel
+         proc
+         (lambda (pr ev)
+           (helm-process-deferred-sentinel-hook
+            pr ev (helm-default-directory))))
+        proc))))
 
-(setq f3-find-source
+(defconst f3-async-candidate-limit 2000)
+
+(defvar f3-find-source
   (helm-build-async-source "f3 find"
     :candidates-process #'f3-make-process
-    :candidate-number-limit 9999))
+    :candidate-number-limit f3-async-candidate-limit))
 
-;;; TODO: make defcustom for f3's default directory
+;;; TODO: make defcustom for f3's default directory: either the current
+;;; directory of the current buffer, the "project directory," or some other
+;;; given directory, or a function that returns a directory path given the
+;;; current file name
+;;; TODO: add function to search through open buffers as well; this use case
+;;; should be optimized for
 
 ;;;###autoload
 (defun f3 (start-dir)
