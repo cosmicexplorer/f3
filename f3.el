@@ -133,7 +133,6 @@
 (defconst f3-buf-name "*f3-find-output*")
 
 (defun f3-make-process ()
-  (setq f3-find-directory default-directory)
   (let* ((current-pattern
           (unless (string-empty-p helm-pattern)
             (f3-pattern-to-parsed-arg
@@ -163,7 +162,12 @@
 
 (defconst f3-async-candidate-limit 2000)
 
-(defvar f3-find-source
+;;; TODO: make this work!
+;; (defvar f3-buffer-source
+;;   (helm-build-in-buffer-source)
+;;   "Source searching currently open buffer names for results.")
+
+(defvar f3-find-process-source
   (helm-build-async-source "f3 find"
     :candidates-process #'f3-make-process
     :candidate-number-limit f3-async-candidate-limit))
@@ -175,18 +179,19 @@
 ;;; TODO: add function to search through open buffers as well; this use case
 ;;; should be optimized for
 
+(defconst f3-helm-buffer-name "*f3*")
+
 ;;;###autoload
 (defun f3 (start-dir)
+  ;; TODO: get the right directory, not just `default-directory'
   (interactive (list default-directory))
   ;; in case user modifies defcustoms after this file is loaded
   (setq
    f3-current-combinator f3-default-combinator
    f3-current-mode f3-default-mode
-   f3-current-complement f3-default-complement
-   ;; TODO: get the right directory
-   f3-find-directory (file-relative-name start-dir))
-  (helm :sources '(f3-find-source) :buffer "*f3*"
-        :default-directory f3-find-directory))
+   f3-current-complement nil            ; no complement at start
+   f3-find-directory start-dir)
+  (helm :sources '(f3-find-process-source) :buffer f3-helm-buffer-name))
 
 (provide 'f3)
 ;;; f3.el ends here
