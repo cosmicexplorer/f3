@@ -1,4 +1,4 @@
-;;; f3.el --- helm interface for searching files really fast -*- lexical-binding: t -*-
+;;; f3.el --- The Fantastic File Finder: a helm interface for searching files really fast -*- lexical-binding: t -*-
 
 ;; Keywords: find, files, helm
 
@@ -60,7 +60,7 @@
 
 (defun f3-create-filetype-pattern (pat)
   (unless (member pat f3-valid-filetype-patterns)
-    (user-error (format "%s '%s'" "invalid filetype pattern" pat)))
+    (error (format "%s '%s'" "invalid filetype pattern" pat)))
   (list :filetype pat))
 
 (defconst f3-combinators '(:and :or))
@@ -72,7 +72,7 @@
   (let ((process-input-fn (cdr (assoc mode f3-input-modes))))
     (if process-input-fn
         (f3-do-complement (funcall process-input-fn pattern) complement)
-      (user-error (format "%s '%S'" "invalid mode" mode)))))
+      (error (format "%s '%S'" "invalid mode" mode)))))
 
 ;;; TODO: do i?wholename and friends as well
 (defun f3-maybe-lowercase-generate (base pat)
@@ -102,7 +102,7 @@
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
     (`(:raw ,thing) (append (list "(") thing (list ")")))
     (`(:filetype ,thing) (list "-type" thing))
-    (_ parsed-args)))
+    (_ (error (format "cannot comprehend arguments %S" parsed-args)))))
 
 (defcustom f3-default-combinator :and
   "Default combinator for multiple `f3' patterns."
@@ -156,15 +156,12 @@
          (let* ((current-pattern
                  (unless (string-empty-p helm-pattern)
                    (f3-pattern-to-parsed-arg
-                    helm-pattern f3-current-mode f3-current-complement)))
-                (combined-pattern
-                 (if f3-current-command
-                     (if current-pattern
-                         (list f3-current-combinator f3-current-command
-                               current-pattern)
-                       f3-current-command)
-                   current-pattern)))
-           (f3-close-parens-to-make-command combined-pattern nil))))
+                    helm-pattern f3-current-mode f3-current-complement))))
+           (or (and f3-current-command current-pattern
+                    (list f3-current-combinator f3-current-command
+                          current-pattern))
+               f3-current-command
+               current-pattern))))
     ;; (message "ast: %S" res)
     res))
 
@@ -173,7 +170,7 @@
     (:text (helm-mm-3-match
             cand
             (replace-regexp-in-string
-             "\\(\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
+             "\\(\\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
     (:regex (helm-mm-3-match cand))
     (t nil)))
 
@@ -214,33 +211,33 @@
 (defvar f3-last-selected-candidate nil)
 
 (defun f3-do (start-dir prev-cmd &optional initial-input)
-  (setq f3-find-directory start-dir
-        f3-current-command prev-cmd
-        f3-buffer-matcher nil)
   ;; FIXME remove all red matches from `helm-highlight-current-line'; all on
   ;; current line still remain
-  (let ((helm-highlight-matches-around-point-max-lines nil))
+  (let ((f3-find-directory start-dir)
+        (f3-current-command prev-cmd)
+        (f3-buffer-matcher nil)
+        (helm-highlight-matches-around-point-max-lines nil)
+        (last-cand
+         (and (stringp f3-last-selected-candidate)
+              (buffer-live-p (get-buffer f3-last-selected-candidate))
+              f3-last-selected-candidate))
+        (prompt (format "%s: " (substring (symbol-name f3-current-mode) 1))))
     (setq f3-last-selected-candidate
           (buffer-name
            (helm :sources '(f3-find-process-source f3-buffer-source)
                  :buffer f3-helm-buffer-name
                  :input (or initial-input "")
-                 :preselect
-                 (if (buffer-live-p (get-buffer f3-last-selected-candidate))
-                     f3-last-selected-candidate
-                   nil)
-                 :prompt (format
-                          "%s: " (substring (symbol-name f3-current-mode) 1)))))))
+                 :preselect last-cand
+                 :prompt prompt)))))
 
 ;;;###autoload
 (defun f3 (start-dir)
   ;; TODO: get the right directory, not just `default-directory'
   (interactive (list default-directory))
-  (setq
-   f3-current-combinator f3-default-combinator
-   f3-current-mode f3-default-mode
-   f3-current-complement nil)
-  (f3-do start-dir nil))
+  (let ((f3-current-combinator f3-default-combinator)
+        (f3-current-mode f3-default-mode)
+        (f3-current-complement nil))
+    (f3-do start-dir nil)))
 
 (provide 'f3)
 ;;; f3.el ends here
