@@ -65,7 +65,7 @@ returning a directory path."
 (defvar f3-buffer-source
   (helm-build-sync-source "open buffers"
     :candidates #'f3-get-buffer-names
-    :match #'f3-filter-buffer-candidates
+    :match-strict #'f3-filter-buffer-candidates
     :candidate-number-limit f3-candidate-limit
     :action (helm-make-actions "Visit" #'switch-to-buffer)
     :persistent-action #'f3-buffer-persistent-action)
@@ -111,7 +111,6 @@ returning a directory path."
 (defconst f3-helm-buffer-name "*f3*")
 (defconst f3-proc-name "*f3-find*")
 (defconst f3-buf-name "*f3-find-output*")
-(defconst f3-err-buf-name "*f3-errors*")
 
 (defconst f3-candidate-limit 2000)
 
@@ -120,11 +119,18 @@ returning a directory path."
     (set-keymap-parent map helm-map)
     (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
     (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
-    (define-key map (kbd "M-f")
+    (define-key map (kbd "M-c")
       (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
     (define-key map (kbd "M-j") (f3-choose-dir-and-rerun #'f3-up-dir))
+    (define-key map (kbd "M-t") (f3-set-mode-and-rerun :text))
+    (define-key map (kbd "M-r") (f3-set-mode-and-rerun :regex))
+    (define-key map (kbd "M-f") (f3-set-mode-and-rerun :raw))
+    (define-key map (kbd "M-d") (f3-set-mode-and-rerun :filetype))
     map)
   "Keymap for `f3'.")
+
+(defconst f3-err-proc-name "*f3-err-proc*")
+(defconst f3-err-buf-name "*f3-errors*")
 
 
 ;; Functions
@@ -160,8 +166,6 @@ returning a directory path."
     (list :raw split-pattern)))
 
 (defun f3-create-filetype-pattern (pat)
-  (unless (member pat f3-valid-filetype-patterns)
-    (error (format "%s '%s'" "invalid filetype pattern" pat)))
   (list :filetype pat))
 
 (defun f3-do-complement (ast do-complement)
@@ -228,28 +232,47 @@ returning a directory path."
     res))
 
 (defun f3-filter-buffer-candidates (cand)
-  (cl-case f3-current-mode
-    (:text (helm-mm-3-match
-            cand
-            (replace-regexp-in-string
-             "\\(\\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
-    (:regex (helm-mm-3-match cand))
-    (t nil)))
+  (when (cl-case f3-current-mode
+          (:text (helm-mm-3-match
+                  cand
+                  (replace-regexp-in-string
+                   "\\(\\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
+          (:regex (helm-mm-3-match cand helm-pattern))
+          (t nil))
+    cand))
 
 (defun f3-make-process ()
   (let ((final-pat (f3-get-ast)))
     (when final-pat
       (with-current-buffer f3-source-buffer
         ;; `f3-async-filter-function' depends upon the choice of "." for dir
-        (let ((args (append (list f3-find-program ".")
-                            (f3-parsed-to-command final-pat)))
-              (default-directory f3-cached-dir))
-          (message "default-directory: %s, args: %S" default-directory args)
-          (make-process
-           :name f3-proc-name
-           :buffer f3-buf-name
-           :command args
-           :stderr f3-err-buf-name))))))
+        (let* ((args (append (list f3-find-program ".")
+                             (f3-parsed-to-command final-pat)))
+               (default-directory f3-cached-dir)
+               (err-proc (make-pipe-process
+                          :name f3-err-proc-name
+                          :buffer f3-err-buf-name
+                          :command '("cat")))
+               (real-proc
+                (make-process
+                 :name f3-proc-name
+                 :buffer f3-buf-name
+                 :command args
+                 :stderr err-proc)))
+          (set-process-filter
+           err-proc
+           (lambda (_ ev)
+             (unless (zerop (process-exit-status real-proc))
+               (with-current-buffer (helm-buffer-get)
+                 (erase-buffer)
+                 (insert
+                  (format "%s\n%s"
+                          (propertize "find failed with error:"
+                                      'face 'font-lock-warning-face)
+                          ev))))))
+          (message "default-directory: %s, args: %S, mode: %S"
+                   default-directory args f3-current-mode)
+          real-proc)))))
 
 (defun f3-clear-opened-persistent-buffers ()
   (cl-mapc #'kill-buffer f3-currently-opened-persistent-buffers)
@@ -257,7 +280,7 @@ returning a directory path."
 
 (defun f3-async-filter-function (cand)
   "Remove leading './' from candidate CAND."
-  (substring cand 2))
+  (replace-regexp-in-string "\\`\\./" "" cand))
 
 (defun f3-async-display-to-real (cand)
   (with-current-buffer f3-source-buffer
@@ -303,12 +326,18 @@ returning a directory path."
   (lambda ()
     (interactive)
     (with-current-buffer f3-source-buffer
-      (let ((cmd f3-current-command)
-            (pat helm-pattern))
-        (helm-run-after-exit
-         (lambda ()
-           (setq f3-cached-dir (funcall dir-fun f3-cached-dir))
-           (f3-do f3-cached-dir cmd pat)))))))
+      (helm-run-after-exit
+       (lambda ()
+         (let ((f3-cached-dir (funcall dir-fun f3-cached-dir)))
+           (f3-do f3-cached-dir f3-current-command helm-pattern)))))))
+
+(defun f3-set-mode-and-rerun (mode)
+  (lambda ()
+    (interactive)
+    (helm-run-after-exit
+     (lambda ()
+       (let ((f3-current-mode mode))
+         (f3-do f3-cached-dir f3-current-command helm-pattern))))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to

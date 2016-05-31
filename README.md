@@ -26,10 +26,10 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
         - <kbd>M-)</kbd> = close paren
     - modes: these do NOT reset helm, just change `f3-current-mode`
+        - <kbd>M-t</kbd> = normal text mode (not regex mode)
         - <kbd>M-r</kbd> = regex mode
-        - <kbd>M-n</kbd> = normal text mode (not regex mode)
         - <kbd>M-f</kbd> = "find" mode (just input raw find arguments)
-        - <kbd>M-f</kbd> = filetype (`b|c|d|f|l|p|s`)
+        - <kbd>M-y</kbd> = filetype (`b|c|d|f|l|p|s`)
             - explode if not recognized
     - modifiers: these change `f3-current-complement` and do NOT reset helm
         - <kbd>M-c</kbd> = toggle complement (current)
@@ -50,7 +50,7 @@ add these to all helm searches
 
 - <kbd>M-p</kbd> = start search from project root
 - <kbd>M-i</kbd> = start search from initial choice of `default-directory`
-- <kbd>M-f</kbd> = choose directory to search from, starting at whatever the current choice is
+- <kbd>M-c</kbd> = choose directory to search from, starting at whatever the current choice is
 - <kbd>M-j</kbd> = start searching a directory up
 
 
