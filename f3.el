@@ -21,11 +21,6 @@
 ;; Customization variables
 (defgroup f3 nil "Group for `f3' customizations.")
 
-(defcustom f3-default-combinator :and
-  "Default combinator for multiple `f3' patterns."
-  :type 'symbol
-  :group 'f3)
-
 (defcustom f3-default-mode :regex
   "Default input mode for `f3' patterns."
   :type 'symbol
@@ -43,6 +38,32 @@ the current directory of the buffer in which `f3' is run. See the source of
 returning a directory path."
   :type '(choice symbol function)
   :group 'f3)
+
+
+;; Constants
+
+;;; functions to parse patterns into an AST
+(defconst f3-input-modes
+  '((:text . f3-create-text-pattern)
+    (:regex . f3-create-regex-pattern)
+    (:raw . f3-create-raw-pattern)
+    (:filetype . f3-create-filetype-pattern))
+  "Modes which interpret the current `helm-pattern' differently.")
+
+(defconst f3-valid-filetype-patterns '("b" "c" "d" "f" "l" "p" "s")
+  "Valid filetype arguments to unix find.")
+
+(defconst f3-combinators '(:and :or))
+
+(defconst f3-helm-buffer-name "*f3*")
+(defconst f3-proc-name "*f3-find*")
+(defconst f3-buf-name "*f3-find-output*")
+
+(defconst f3-candidate-limit 2000)
+
+(defconst f3-err-proc-name "*f3-err-proc*")
+(defconst f3-err-buf-name "*f3-errors*")
+(defconst f3-err-msg-props '(font-lock-warning-face :height 2.0))
 
 
 ;; Global variables
@@ -90,48 +111,6 @@ returning a directory path."
 
 ;; Buffer-local variables
 (defvar-local f3-cached-dir nil)
-
-
-;; Constants
-
-;;; functions to parse patterns into an AST
-;;; TODO: persist input mode across combinators
-(defconst f3-input-modes
-  '((:text . f3-create-text-pattern)
-    (:regex . f3-create-regex-pattern)
-    (:raw . f3-create-raw-pattern)
-    (:filetype . f3-create-filetype-pattern))
-  "Modes which interpret the current `helm-pattern' differently.")
-
-(defconst f3-valid-filetype-patterns '("b" "c" "d" "f" "l" "p" "s")
-  "Valid filetype arguments to unix find.")
-
-(defconst f3-combinators '(:and :or))
-
-(defconst f3-helm-buffer-name "*f3*")
-(defconst f3-proc-name "*f3-find*")
-(defconst f3-buf-name "*f3-find-output*")
-
-(defconst f3-candidate-limit 2000)
-
-(defconst f3-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map helm-map)
-    (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
-    (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
-    (define-key map (kbd "M-c")
-      (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
-    (define-key map (kbd "M-j") (f3-choose-dir-and-rerun #'f3-up-dir))
-    (define-key map (kbd "M-t") (f3-set-mode-and-rerun :text))
-    (define-key map (kbd "M-r") (f3-set-mode-and-rerun :regex))
-    (define-key map (kbd "M-f") (f3-set-mode-and-rerun :raw))
-    (define-key map (kbd "M-d") (f3-set-mode-and-rerun :filetype))
-    map)
-  "Keymap for `f3'.")
-
-(defconst f3-err-proc-name "*f3-err-proc*")
-(defconst f3-err-buf-name "*f3-errors*")
-(defconst f3-err-msg-props '(font-lock-warning-face :height 2.0))
 
 
 ;; Functions
@@ -219,18 +198,15 @@ returning a directory path."
   (helm-highlight-current-line))
 
 (defun f3-get-ast ()
-  (let ((res
-         (let* ((current-pattern
-                 (unless (string-empty-p helm-pattern)
-                   (f3-pattern-to-parsed-arg
-                    helm-pattern f3-current-mode f3-current-complement))))
-           (or (and f3-current-command current-pattern
-                    (list f3-current-combinator f3-current-command
-                          current-pattern))
-               f3-current-command
-               current-pattern))))
-    ;; (message "ast: %S" res)
-    res))
+  (let* ((current-pattern
+          (unless (string-empty-p helm-pattern)
+            (f3-pattern-to-parsed-arg
+             helm-pattern f3-current-mode f3-current-complement))))
+    (or (and f3-current-command current-pattern
+             (list f3-current-combinator f3-current-command
+                   current-pattern))
+        f3-current-command
+        current-pattern)))
 
 (defun f3-filter-buffer-candidates (cand)
   (cl-case f3-current-mode
@@ -268,8 +244,8 @@ returning a directory path."
                  (let ((err-msg (propertize "find failed with error:"
                                             'face f3-err-msg-props)))
                    (insert (format "%s\n%s" err-msg ev)))))))
-          (message "default-directory: %s, args: %S, mode: %S"
-                   default-directory args f3-current-mode)
+          (message "default-directory: %s, args: %S, mode: %S, ast: %S"
+                   default-directory args f3-current-mode final-pat)
           real-proc)))))
 
 (defun f3-clear-opened-persistent-buffers ()
@@ -334,8 +310,8 @@ returning a directory path."
     (interactive)
     (helm-run-after-exit
      (lambda ()
-       (let ((f3-current-mode mode))
-         (f3-do f3-cached-dir f3-current-command helm-pattern))))))
+       (setq f3-current-mode mode)
+       (f3-do f3-cached-dir f3-current-command helm-pattern)))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
@@ -363,13 +339,29 @@ returning a directory path."
                 :default-directory start-dir))))
 
 
+;; Keymap
+(defconst f3-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map helm-map)
+    (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
+    (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
+    (define-key map (kbd "M-c")
+      (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
+    (define-key map (kbd "M-j") (f3-choose-dir-and-rerun #'f3-up-dir))
+    (define-key map (kbd "M-t") (f3-set-mode-and-rerun :text))
+    (define-key map (kbd "M-r") (f3-set-mode-and-rerun :regex))
+    (define-key map (kbd "M-f") (f3-set-mode-and-rerun :raw))
+    (define-key map (kbd "M-d") (f3-set-mode-and-rerun :filetype))
+    map)
+  "Keymap for `f3'.")
+
+
 ;; Autoloaded functions
 
 ;;;###autoload
 (defun f3 (start-dir)
   (interactive (list (f3-choose-dir)))
   (let ((f3-source-buffer (current-buffer))
-        (f3-current-combinator f3-default-combinator)
         (f3-current-mode f3-default-mode)
         (f3-current-complement nil))
     (f3-do start-dir nil)))
