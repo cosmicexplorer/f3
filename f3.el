@@ -1,8 +1,15 @@
 ;;; f3.el --- The Fantastic File Finder: a helm interface for searching files really fast -*- lexical-binding: t -*-
 
+;; Author: Danny McClanahan <danieldmcclanahan@gmail.com>
+;; Version 0.1
+;; Package-Requires: ((emacs "24") (helm "1.9.6"))
 ;; Keywords: find, files, helm
 
 ;;; Commentary:
+
+;; Focuses on two use cases:
+;; 1. Finding a file in a project really fast.
+;; 2. Finding some complex set of files and performing some action on them.
 
 ;;; Code:
 
@@ -10,11 +17,82 @@
 (require 'helm)
 (require 'helm-utils)
 
-(defgroup f3 nil
-  "Group for `f3' customizations.")
+
+;; Customization variables
+(defgroup f3 nil "Group for `f3' customizations.")
 
-;;; TODO: ignore commonly ignored files/folders (.git, anything in .gitignore,
-;;; etc)
+(defcustom f3-default-combinator :and
+  "Default combinator for multiple `f3' patterns."
+  :type 'symbol
+  :group 'f3)
+
+(defcustom f3-default-mode :regex
+  "Default input mode for `f3' patterns."
+  :type 'symbol
+  :group 'f3)
+
+(defcustom f3-find-program "find"
+  "Default command to find files with using `f3'."
+  :group 'f3)
+
+(defcustom f3-default-directory 'project
+  "Default directory to set as pwd when running `f3'. 'project for the project
+directory, 'choose to choose every time, and nil (or anything else) to choose
+the current directory of the buffer in which `f3' is run. See the source of
+`f3-choose-dir' for details. Can be a function accepting the current buffer and
+returning a directory path."
+  :type '(choice symbol function)
+  :group 'f3)
+
+
+;; Global variables
+(defvar f3-current-combinator f3-default-combinator)
+
+(defvar f3-current-mode f3-default-mode)
+
+;;; TODO: restart `helm-pattern' with whatever was in it before `f3-open-paren'
+;;; or `f3-close-paren' was called, after calling it
+(defvar f3-current-complement nil)
+
+(defvar f3-current-command nil)
+
+;;; matches buffers strictly by `helm-pattern', and only when no combinators are
+;;; used
+;;; TODO: switch this off whenever a combinator is turned on
+(defvar f3-match-buffers t
+  "Whether to match buffers as well as async find results.")
+
+(defvar f3-buffer-source
+  (helm-build-sync-source "open buffers"
+    :candidates #'f3-get-buffer-names
+    :match #'f3-filter-buffer-candidates
+    :candidate-number-limit f3-candidate-limit
+    :action (helm-make-actions "Visit" #'switch-to-buffer)
+    :persistent-action #'f3-buffer-persistent-action)
+  "Source searching currently open buffer names for results.")
+
+(defvar f3-currently-opened-persistent-buffers nil)
+
+(defvar f3-find-process-source
+  (helm-build-async-source "find"
+    :candidates-process #'f3-make-process
+    :candidate-number-limit f3-candidate-limit
+    :action (helm-make-actions "Visit" #'f3-async-action)
+    :persistent-action #'f3-async-persistent-action
+    :filter-one-by-one #'f3-async-filter-function
+    :cleanup #'f3-clear-opened-persistent-buffers)
+  "Source searching files within a given directory using the find command.")
+
+(defvar f3-last-selected-candidate nil)
+
+(defvar f3-source-buffer nil)
+
+
+;; Buffer-local variables
+(defvar-local f3-cached-dir nil)
+
+
+;; Constants
 
 ;;; functions to parse patterns into an AST
 ;;; TODO: persist input mode across combinators
@@ -24,6 +102,32 @@
     (:raw . f3-create-raw-pattern)
     (:filetype . f3-create-filetype-pattern))
   "Modes which interpret the current `helm-pattern' differently.")
+
+(defconst f3-valid-filetype-patterns '("b" "c" "d" "f" "l" "p" "s")
+  "Valid filetype arguments to unix find.")
+
+(defconst f3-combinators '(:and :or))
+
+(defconst f3-helm-buffer-name "*f3*")
+(defconst f3-proc-name "*f3-find*")
+(defconst f3-buf-name "*f3-find-output*")
+(defconst f3-err-buf-name "*f3-errors*")
+
+(defconst f3-candidate-limit 2000)
+
+(defconst f3-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map helm-map)
+    (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
+    (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
+    (define-key map (kbd "M-f")
+      (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
+    (define-key map (kbd "M-j") (f3-choose-dir-and-rerun #'f3-up-dir))
+    map)
+  "Keymap for `f3'.")
+
+
+;; Functions
 
 (defun f3-create-text-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
@@ -51,20 +155,14 @@
   "Assumes correctness of pattern PAT."
   (let ((split-pattern
          (cl-mapcar
-          (lambda (str)
-            (replace-regexp-in-string "\\`['\"]\\|['\"]\\'" "" str))
+          (lambda (str) (replace-regexp-in-string "\\`['\"]\\|['\"]\\'" "" str))
           (helm-mm-split-pattern pat))))
     (list :raw split-pattern)))
-
-(defconst f3-valid-filetype-patterns '("b" "c" "d" "f" "l" "p" "s")
-  "Valid filetype arguments to unix find.")
 
 (defun f3-create-filetype-pattern (pat)
   (unless (member pat f3-valid-filetype-patterns)
     (error (format "%s '%s'" "invalid filetype pattern" pat)))
   (list :filetype pat))
-
-(defconst f3-combinators '(:and :or))
 
 (defun f3-do-complement (ast do-complement)
   (if do-complement (list :not ast) ast))
@@ -105,37 +203,6 @@
     (`(:filetype ,thing) (list "-type" thing))
     (_ (error (format "cannot comprehend arguments %S" parsed-args)))))
 
-(defcustom f3-default-combinator :and
-  "Default combinator for multiple `f3' patterns."
-  :group 'f3)
-(defvar f3-current-combinator f3-default-combinator)
-(defcustom f3-default-mode :regex
-  "Default input mode for `f3' patterns."
-  :group 'f3)
-(defvar f3-current-mode f3-default-mode)
-
-;;; TODO: restart `helm-pattern' with whatever was in it before `f3-open-paren'
-;;; or `f3-close-paren' was called, after calling it
-(defvar f3-current-complement nil)
-
-(defcustom f3-find-program "find"
-  "Default command to find files with using `f3'."
-  :group 'f3)
-
-(defvar f3-current-command nil)
-
-(defconst f3-proc-name "*f3-find*")
-(defconst f3-buf-name "*f3-find-output*")
-(defconst f3-err-buf-name "*f3-errors*")
-
-(defconst f3-candidate-limit 2000)
-
-;;; matches buffers strictly by `helm-pattern', and only when no combinators are
-;;; used
-;;; TODO: switch this off whenever a combinator is turned on
-(defvar f3-match-buffers t
-  "Whether to match buffers as well as async find results.")
-
 (defun f3-get-buffer-names ()
   (when f3-match-buffers
     (mapcar
@@ -169,19 +236,11 @@
     (:regex (helm-mm-3-match cand))
     (t nil)))
 
-(defvar f3-buffer-source
-  (helm-build-sync-source "open buffers"
-    :candidates #'f3-get-buffer-names
-    :match #'f3-filter-buffer-candidates
-    :candidate-number-limit f3-candidate-limit
-    :action (helm-make-actions "Visit" #'switch-to-buffer)
-    :persistent-action #'f3-buffer-persistent-action)
-  "Source searching currently open buffer names for results.")
-
 (defun f3-make-process ()
   (let ((final-pat (f3-get-ast)))
     (when final-pat
       (with-current-buffer f3-source-buffer
+        ;; `f3-async-filter-function' depends upon the choice of "." for dir
         (let ((args (append (list f3-find-program ".")
                             (f3-parsed-to-command final-pat)))
               (default-directory f3-cached-dir))
@@ -191,8 +250,6 @@
            :buffer f3-buf-name
            :command args
            :stderr f3-err-buf-name))))))
-
-(defvar f3-currently-opened-persistent-buffers nil)
 
 (defun f3-clear-opened-persistent-buffers ()
   (cl-mapc #'kill-buffer f3-currently-opened-persistent-buffers)
@@ -217,27 +274,6 @@
 (defun f3-async-action (cand)
   (switch-to-buffer (f3-async-display-to-real cand)))
 
-(defvar f3-find-process-source
-  (helm-build-async-source "find"
-    :candidates-process #'f3-make-process
-    :candidate-number-limit f3-candidate-limit
-    :action (helm-make-actions "Visit" #'f3-async-action)
-    :persistent-action #'f3-async-persistent-action
-    :filter-one-by-one #'f3-async-filter-function
-    :cleanup #'f3-clear-opened-persistent-buffers)
-  "Source searching files within a given directory using the find command.")
-
-;;; TODO: make defcustom for f3's default directory: either the current
-;;; directory of the current buffer, the "project directory," or some other
-;;; given directory, or a function that returns a directory path given the
-;;; current file name
-
-(defconst f3-helm-buffer-name "*f3*")
-
-(defvar f3-last-selected-candidate nil)
-
-(defvar-local f3-cached-dir nil)
-
 ;;; TODO: implement this!!! use some external library
 (defun f3-use-project-dir (from)
   (error "can't find project dir!"))
@@ -252,24 +288,16 @@
 (defun f3-up-dir (from)
   (expand-file-name (format "%s/../" from)))
 
-(defcustom f3-default-directory 'project
-  "Default directory to set as pwd when running `f3'. 'project for the project
-directory, 'choose to choose every time, and nil (or anything else) to choose
-the current directory of the buffer in which `f3' is run. See the source of
-`f3-choose-dir' for details."
-  :group 'f3
-  :type 'symbol)
-
-(defvar f3-source-buffer nil)
-
 (defun f3-choose-dir ()
   (with-current-buffer (or f3-source-buffer (current-buffer))
     (or f3-cached-dir
         (setq f3-cached-dir
-              (cl-case f3-default-directory
-                (project (f3-use-project-dir))
-                (choose (f3-explicitly-choose-dir))
-                (t default-directory))))))
+              (if (functionp f3-default-directory)
+                  (f3-default-directory (current-buffer))
+                (cl-case f3-default-directory
+                  (project (f3-use-project-dir))
+                  (choose (f3-explicitly-choose-dir))
+                  (t default-directory)))))))
 
 (defun f3-choose-dir-and-rerun (dir-fun)
   (lambda ()
@@ -282,16 +310,9 @@ the current directory of the buffer in which `f3' is run. See the source of
            (setq f3-cached-dir (funcall dir-fun f3-cached-dir))
            (f3-do f3-cached-dir cmd pat)))))))
 
-(defconst f3-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map helm-map)
-    (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
-    (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
-    (define-key map (kbd "M-f")
-      (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
-    (define-key map (kbd "M-j") (f3-choose-dir-and-rerun #'f3-up-dir))
-    map)
-  "Keymap for `f3'.")
+;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
+;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
+;;; dump to a dired buffer
 
 (defun f3-do (start-dir prev-cmd &optional initial-input)
   ;; FIXME: remove all red matches from `helm-highlight-current-line'; all on
@@ -313,6 +334,9 @@ the current directory of the buffer in which `f3' is run. See the source of
                 :prompt prompt
                 :keymap f3-map
                 :default-directory start-dir))))
+
+
+;; Autoloaded functions
 
 ;;;###autoload
 (defun f3 (start-dir)
