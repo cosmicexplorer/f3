@@ -18,7 +18,7 @@
 (require 'helm-utils)
 
 
-;; Customization variables
+;; Customization
 (defgroup f3 nil "Group for `f3' customizations.")
 
 (defcustom f3-default-mode :regex
@@ -67,7 +67,7 @@ returning a directory path."
 
 
 ;; Global variables
-(defvar f3-current-combinator f3-default-combinator)
+(defvar f3-current-combinator nil)
 
 (defvar f3-current-mode f3-default-mode)
 

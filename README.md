@@ -35,12 +35,12 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-c</kbd> = toggle complement (current)
     - actions
         - <kbd>M-g</kbd> = run command on results in new `*Async Shell Command*` buffer and close helm
-        - <kbd>M-l</kbd> = list the files in a dired buffer and exit
+        - <kbd>M-l</kbd> = exit helm and list the files in a dired buffer
         - <kbd>RET</kbd> = visit
         - <kbd>TAB</kbd> = preview
     - meta
         - <kbd>M-z</kbd> = undo whatever was just done
-        - <kbd>C-M-z</kbd> = redo
+        - <kbd>M-S-z</kbd> = redo
         - <kbd>M-m</kbd> = set `mindepth`
         - <kbd>M-d</kbd> = set `maxdepth`
 
