@@ -20,8 +20,8 @@ Find files fast, using helm. It'll be cool, trust me.
 - bust out keybindings for set intersections and then running commands
 - these keybindings interpret the current pattern as an "and" pattern as shown above and then clear `helm-pattern` to eventually build a `find` command line
     - combinators: these set `f3-current-combinator`, take the current pattern as word, and reset helm
-        - <kbd>M-o</kbd> = union ("or")
-        - <kbd>M-a</kbd> = intersection ("and")
+        - <kbd>M-*</kbd> = union ("or")
+        - <kbd>M-+</kbd> = intersection ("and")
     - groupings: these call `f3-(open/close)-paren` and reset helm
         - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
         - <kbd>M-)</kbd> = close paren
@@ -29,20 +29,20 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-t</kbd> = normal text mode (not regex mode)
         - <kbd>M-r</kbd> = regex mode
         - <kbd>M-f</kbd> = "find" mode (just input raw find arguments)
-        - <kbd>M-y</kbd> = filetype (`b|c|d|f|l|p|s`)
+        - <kbd>M-d</kbd> = filetype (`b|c|d|f|l|p|s`)
             - explode if not recognized
     - modifiers: these change `f3-current-complement` and do NOT reset helm
-        - <kbd>M-c</kbd> = toggle complement (current)
+        - <kbd>M-q</kbd> = toggle complement (current)
     - actions
         - <kbd>M-g</kbd> = run command on results in new `*Async Shell Command*` buffer and close helm
         - <kbd>M-l</kbd> = exit helm and list the files in a dired buffer
         - <kbd>RET</kbd> = visit
         - <kbd>TAB</kbd> = preview
     - meta
-        - <kbd>M-z</kbd> = undo whatever was just done
-        - <kbd>M-S-z</kbd> = redo
-        - <kbd>M-m</kbd> = set `mindepth`
-        - <kbd>M-d</kbd> = set `maxdepth`
+        - <kbd>M-u</kbd> = undo whatever was just done
+        - <kbd>M-S-u</kbd> = redo
+        - <kbd>M-<</kbd> = set `mindepth`
+        - <kbd>M-></kbd> = set `maxdepth`
 
 ## other helm things in general
 

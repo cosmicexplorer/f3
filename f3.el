@@ -219,7 +219,7 @@ returning a directory path."
   (let ((final-pat (f3-get-ast)))
     (when final-pat
       (with-current-buffer f3-source-buffer
-        ;; `f3-async-filter-function' depends upon the choice of "." for dir
+        ;; n.b.: `f3-async-filter-function' depends upon the "." literal
         (let* ((args (append (list f3-find-program ".")
                              (f3-parsed-to-command final-pat)))
                (default-directory f3-cached-dir)
@@ -235,8 +235,9 @@ returning a directory path."
                  :stderr err-proc)))
           (set-process-filter
            err-proc
-           (lambda (_ ev)
-             (unless (zerop (process-exit-status real-proc))
+           (lambda (proc ev)
+             (if (zerop (process-exit-status real-proc))
+                 (with-current-buffer (process-buffer proc) (insert ev))
                (with-current-buffer (helm-buffer-get)
                  (erase-buffer)
                  (let ((err-msg (propertize "find failed with error:"
@@ -310,8 +311,8 @@ returning a directory path."
     (interactive)
     (with-current-buffer f3-source-buffer
       (f3-run-after-exit
-       (let ((f3-cached-dir (funcall dir-fun f3-cached-dir)))
-         (f3-do f3-cached-dir f3-current-command helm-pattern))))))
+       (setq f3-cached-dir (funcall dir-fun f3-cached-dir))
+       (f3-do f3-cached-dir f3-current-command helm-pattern)))))
 
 (defun f3-set-mode-and-rerun (mode)
   (let ((run-mode mode))
@@ -325,6 +326,12 @@ returning a directory path."
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
 ;;; dump to a dired buffer
 
+(defun f3-toggle-complement ()
+  (interactive)
+  (f3-run-after-exit
+   (setq f3-current-complement (not f3-current-complement))
+   (f3-do f3-cached-dir f3-current-command helm-pattern)))
+
 (defun f3-do (start-dir prev-cmd &optional initial-input)
   ;; FIXME: remove all red matches from `helm-highlight-current-line'; all on
   ;; current line still remain
@@ -335,15 +342,16 @@ returning a directory path."
          (and (stringp f3-last-selected-candidate)
               (buffer-live-p (get-buffer f3-last-selected-candidate))
               f3-last-selected-candidate))
-        (prompt (format "%s: " (substring (symbol-name f3-current-mode) 1))))
+        (prompt (format "%s%s: "
+                        (if f3-current-complement "(not) " "")
+                        (substring (symbol-name f3-current-mode) 1))))
     (setq f3-last-selected-candidate
           (helm :sources '(f3-find-process-source f3-buffer-source)
                 :buffer f3-helm-buffer-name
                 :input (or initial-input "")
                 :preselect last-cand
                 :prompt prompt
-                :keymap f3-map
-                :default-directory start-dir))))
+                :keymap f3-map))))
 
 
 ;; Keymap
@@ -359,6 +367,7 @@ returning a directory path."
     (define-key map (kbd "M-r") (f3-set-mode-and-rerun :regex))
     (define-key map (kbd "M-f") (f3-set-mode-and-rerun :raw))
     (define-key map (kbd "M-d") (f3-set-mode-and-rerun :filetype))
+    (define-key map (kbd "M-q") #'f3-toggle-complement)
     map)
   "Keymap for `f3'.")
 
