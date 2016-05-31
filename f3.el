@@ -5,12 +5,14 @@
 ;; Package-Requires: ((emacs "24") (helm "1.9.6"))
 ;; Keywords: find, files, helm
 
+
 ;;; Commentary:
 
 ;; Focuses on two use cases:
 ;; 1. Finding a file in a project really fast.
 ;; 2. Finding some complex set of files and performing some action on them.
 
+
 ;;; Code:
 
 (require 'cl-lib)
@@ -42,8 +44,6 @@ returning a directory path."
 
 
 ;; Constants
-
-;;; functions to parse patterns into an AST
 (defconst f3-input-modes
   '((:text . f3-create-text-pattern)
     (:regex . f3-create-regex-pattern)
@@ -78,8 +78,6 @@ returning a directory path."
 
 (defvar f3-current-command nil)
 
-;;; matches buffers strictly by `helm-pattern', and only when no combinators are
-;;; used
 ;;; TODO: switch this off whenever a combinator is turned on
 (defvar f3-match-buffers t
   "Whether to match buffers as well as async find results.")
@@ -115,7 +113,6 @@ returning a directory path."
 
 
 ;; Functions
-
 (defun f3-create-text-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
     (cl-reduce
@@ -245,6 +242,13 @@ returning a directory path."
                  (let ((err-msg (propertize "find failed with error:"
                                             'face f3-err-msg-props)))
                    (insert (format "%s\n%s" err-msg ev)))))))
+          (helm-attrset
+           'name
+           (format
+            "%s: %s"
+            f3-cached-dir
+            (mapconcat #'identity args " "))
+           f3-find-process-source)
           (message "default-directory: %s, args: %S, mode: %S, ast: %S"
                    default-directory args f3-current-mode final-pat)
           real-proc)))))
@@ -332,7 +336,6 @@ returning a directory path."
               (buffer-live-p (get-buffer f3-last-selected-candidate))
               f3-last-selected-candidate))
         (prompt (format "%s: " (substring (symbol-name f3-current-mode) 1))))
-    (helm-attrset 'name (format "find @ %s" start-dir) f3-find-process-source)
     (setq f3-last-selected-candidate
           (helm :sources '(f3-find-process-source f3-buffer-source)
                 :buffer f3-helm-buffer-name
