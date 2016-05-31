@@ -192,8 +192,7 @@ returning a directory path."
      (cl-remove-if-not #'buffer-file-name (buffer-list)))))
 
 (defun f3-buffer-persistent-action (buf)
-  (switch-to-buffer buf)
-  (helm-highlight-current-line))
+  (switch-to-buffer buf))
 
 (defun f3-get-ast ()
   (let* ((current-pattern
@@ -333,11 +332,8 @@ returning a directory path."
    (f3-do f3-cached-dir f3-current-command helm-pattern)))
 
 (defun f3-do (start-dir prev-cmd &optional initial-input)
-  ;; FIXME: remove all red matches from `helm-highlight-current-line'; all on
-  ;; current line still remain
   (let ((f3-current-command prev-cmd)
         (f3-buffer-matcher nil)
-        (helm-highlight-matches-around-point-max-lines nil)
         (last-cand
          (and (stringp f3-last-selected-candidate)
               (buffer-live-p (get-buffer f3-last-selected-candidate))
