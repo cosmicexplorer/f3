@@ -121,7 +121,6 @@
   "Default command to find files with using `f3'."
   :group 'f3)
 
-(defvar f3-find-directory nil)
 (defvar f3-current-command nil)
 
 (defconst f3-proc-name "*f3-find*")
@@ -175,7 +174,7 @@
     (t nil)))
 
 (defvar f3-buffer-source
-  (helm-build-sync-source "f3 buffer search"
+  (helm-build-sync-source "open buffers"
     :candidates #'f3-get-buffer-names
     :match #'f3-filter-buffer-candidates
     :candidate-number-limit f3-candidate-limit
@@ -186,20 +185,46 @@
 (defun f3-make-process ()
   (let ((final-pat (f3-get-ast)))
     (when final-pat
-      (let* ((find-dir
-              (file-relative-name f3-find-directory))
-             (args-list (cons find-dir (f3-parsed-to-command final-pat))))
-        (message "args: %S" args-list)
-        (make-process
-         :name f3-proc-name
-         :buffer f3-buf-name
-         :command (cons f3-find-program args-list)
-         :stderr f3-err-buf-name)))))
+      (with-current-buffer f3-source-buffer
+        (let ((args (append (list f3-find-program ".")
+                            (f3-parsed-to-command final-pat)))
+              (default-directory f3-cached-dir))
+          (message "default-directory: %s, args: %S" default-directory args)
+          (make-process
+           :name f3-proc-name
+           :buffer f3-buf-name
+           :command args
+           :stderr f3-err-buf-name))))))
+
+(defvar f3-currently-opened-persistent-buffers nil)
+
+(defun f3-clear-opened-persistent-buffers ()
+  (cl-mapc #'kill-buffer f3-currently-opened-persistent-buffers)
+  (setq f3-currently-opened-persistent-buffers nil))
+
+(defun f3-async-filter-function (cand)
+  "Remove leading './' from candidate CAND."
+  (substring cand 2))
+
+(defun f3-async-display-to-real (cand)
+  (with-current-buffer f3-source-buffer
+    (let* ((default-directory f3-cached-dir)
+           (buf (find-buffer-visiting cand)))
+      (unless buf
+        (setq buf (find-file cand))
+        (push buf f3-currently-opened-persistent-buffers))
+      buf)))
 
 (defvar f3-find-process-source
-  (helm-build-async-source "f3 find"
+  (helm-build-async-source "find"
     :candidates-process #'f3-make-process
-    :candidate-number-limit f3-candidate-limit))
+    :candidate-number-limit f3-candidate-limit
+    :action (helm-make-actions "Visit" #'switch-to-buffer)
+    :persistent-action #'f3-buffer-persistent-action
+    :filter-one-by-one #'f3-async-filter-function
+    :display-to-real #'f3-async-display-to-real
+    :cleanup #'f3-clear-opened-persistent-buffers)
+  "Source searching files within a given directory using the find command.")
 
 ;;; TODO: make defcustom for f3's default directory: either the current
 ;;; directory of the current buffer, the "project directory," or some other
@@ -210,11 +235,67 @@
 
 (defvar f3-last-selected-candidate nil)
 
+(defvar-local f3-cached-dir nil)
+
+;;; TODO: implement this!!! use some external library
+(defun f3-use-project-dir (from)
+  (error "can't find project dir!"))
+
+(defun f3-use-file-dir (_)
+  (with-current-buffer (or f3-source-buffer (current-buffer))
+    default-directory))
+
+(defun f3-explicitly-choose-dir (from)
+  (expand-file-name (read-directory-name "Directory to search: " from nil t)))
+
+(defun f3-up-dir (from)
+  (expand-file-name (format "%s/../" from)))
+
+(defcustom f3-default-directory 'project
+  "Default directory to set as pwd when running `f3'. 'project for the project
+directory, 'choose to choose every time, and nil (or anything else) to choose
+the current directory of the buffer in which `f3' is run. See the source of
+`f3-choose-dir' for details."
+  :group 'f3
+  :type 'symbol)
+
+(defvar f3-source-buffer nil)
+
+(defun f3-choose-dir ()
+  (with-current-buffer (or f3-source-buffer (current-buffer))
+    (or f3-cached-dir
+        (setq f3-cached-dir
+              (cl-case f3-default-directory
+                (project (f3-use-project-dir))
+                (choose (f3-explicitly-choose-dir))
+                (t default-directory))))))
+
+(defun f3-choose-dir-and-rerun (dir-fun)
+  (lambda ()
+    (interactive)
+    (with-current-buffer f3-source-buffer
+      (let ((cmd f3-current-command)
+            (pat helm-pattern))
+        (helm-run-after-exit
+         (lambda ()
+           (setq f3-cached-dir (funcall dir-fun f3-cached-dir))
+           (f3-do f3-cached-dir cmd pat)))))))
+
+(defconst f3-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map helm-map)
+    (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
+    (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
+    (define-key map (kbd "M-f")
+      (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
+    (define-key map (kbd "M-j") (f3-choose-dir-and-rerun #'f3-up-dir))
+    map)
+  "Keymap for `f3'.")
+
 (defun f3-do (start-dir prev-cmd &optional initial-input)
-  ;; FIXME remove all red matches from `helm-highlight-current-line'; all on
+  ;; FIXME: remove all red matches from `helm-highlight-current-line'; all on
   ;; current line still remain
-  (let ((f3-find-directory start-dir)
-        (f3-current-command prev-cmd)
+  (let ((f3-current-command prev-cmd)
         (f3-buffer-matcher nil)
         (helm-highlight-matches-around-point-max-lines nil)
         (last-cand
@@ -222,19 +303,21 @@
               (buffer-live-p (get-buffer f3-last-selected-candidate))
               f3-last-selected-candidate))
         (prompt (format "%s: " (substring (symbol-name f3-current-mode) 1))))
+    (helm-attrset 'name (format "find @ %s" start-dir) f3-find-process-source)
     (setq f3-last-selected-candidate
-          (buffer-name
-           (helm :sources '(f3-find-process-source f3-buffer-source)
-                 :buffer f3-helm-buffer-name
-                 :input (or initial-input "")
-                 :preselect last-cand
-                 :prompt prompt)))))
+          (helm :sources '(f3-find-process-source f3-buffer-source)
+                :buffer f3-helm-buffer-name
+                :input (or initial-input "")
+                :preselect last-cand
+                :prompt prompt
+                :keymap f3-map
+                :default-directory start-dir))))
 
 ;;;###autoload
 (defun f3 (start-dir)
-  ;; TODO: get the right directory, not just `default-directory'
-  (interactive (list default-directory))
-  (let ((f3-current-combinator f3-default-combinator)
+  (interactive (list (f3-choose-dir)))
+  (let ((f3-source-buffer (current-buffer))
+        (f3-current-combinator f3-default-combinator)
         (f3-current-mode f3-default-mode)
         (f3-current-complement nil))
     (f3-do start-dir nil)))
