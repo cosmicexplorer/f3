@@ -131,6 +131,7 @@ returning a directory path."
 
 (defconst f3-err-proc-name "*f3-err-proc*")
 (defconst f3-err-buf-name "*f3-errors*")
+(defconst f3-err-msg-props '(font-lock-warning-face :height 2.0))
 
 
 ;; Functions
@@ -232,14 +233,13 @@ returning a directory path."
     res))
 
 (defun f3-filter-buffer-candidates (cand)
-  (when (cl-case f3-current-mode
-          (:text (helm-mm-3-match
-                  cand
-                  (replace-regexp-in-string
-                   "\\(\\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
-          (:regex (helm-mm-3-match cand helm-pattern))
-          (t nil))
-    cand))
+  (cl-case f3-current-mode
+    (:text (helm-mm-3-match
+            cand
+            (replace-regexp-in-string
+             "\\(\\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
+    (:regex (helm-mm-3-match cand helm-pattern))
+    (t nil)))
 
 (defun f3-make-process ()
   (let ((final-pat (f3-get-ast)))
@@ -265,11 +265,9 @@ returning a directory path."
              (unless (zerop (process-exit-status real-proc))
                (with-current-buffer (helm-buffer-get)
                  (erase-buffer)
-                 (insert
-                  (format "%s\n%s"
-                          (propertize "find failed with error:"
-                                      'face 'font-lock-warning-face)
-                          ev))))))
+                 (let ((err-msg (propertize "find failed with error:"
+                                            'face f3-err-msg-props)))
+                   (insert (format "%s\n%s" err-msg ev)))))))
           (message "default-directory: %s, args: %S, mode: %S"
                    default-directory args f3-current-mode)
           real-proc)))))
