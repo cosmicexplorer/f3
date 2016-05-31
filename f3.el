@@ -16,6 +16,7 @@
 (require 'cl-lib)
 (require 'helm)
 (require 'helm-utils)
+(require 'subr-x)
 
 
 ;; Customization
@@ -296,21 +297,24 @@ returning a directory path."
                   (choose (f3-explicitly-choose-dir))
                   (t default-directory)))))))
 
+(defmacro f3-run-after-exit (&rest body)
+  `(helm-run-after-exit
+    (lambda () ,@body)))
+
 (defun f3-choose-dir-and-rerun (dir-fun)
   (lambda ()
     (interactive)
     (with-current-buffer f3-source-buffer
-      (helm-run-after-exit
-       (lambda ()
-         (let ((f3-cached-dir (funcall dir-fun f3-cached-dir)))
-           (f3-do f3-cached-dir f3-current-command helm-pattern)))))))
+      (f3-run-after-exit
+       (let ((f3-cached-dir (funcall dir-fun f3-cached-dir)))
+         (f3-do f3-cached-dir f3-current-command helm-pattern))))))
 
 (defun f3-set-mode-and-rerun (mode)
-  (lambda ()
-    (interactive)
-    (helm-run-after-exit
-     (lambda ()
-       (setq f3-current-mode mode)
+  (let ((run-mode mode))
+    (lambda ()
+      (interactive)
+      (f3-run-after-exit
+       (setq f3-current-mode run-mode)
        (f3-do f3-cached-dir f3-current-command helm-pattern)))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
