@@ -8,6 +8,7 @@
 
 (require 'cl-lib)
 (require 'helm)
+(require 'helm-utils)
 
 (defgroup f3 nil
   "Group for `f3' customizations.")
@@ -143,12 +144,7 @@
 
 (defun f3-buffer-persistent-action (buf)
   (switch-to-buffer buf)
-  (let ((start (line-beginning-position))
-        (end (1+ (line-end-position))))
-    (if (not helm-match-line-overlay)
-        (setq helm-match-line-overlay (make-overlay start end buf))
-      (move-overlay helm-match-line-overlay start end buf))
-    (overlay-put helm-match-line-overlay 'face 'helm-selection-line)))
+  (helm-highlight-current-line))
 
 (defun f3-get-ast ()
   (let ((res
@@ -215,14 +211,19 @@
         (push buf f3-currently-opened-persistent-buffers))
       buf)))
 
+(defun f3-async-persistent-action (cand)
+  (f3-buffer-persistent-action (f3-async-display-to-real cand)))
+
+(defun f3-async-action (cand)
+  (switch-to-buffer (f3-async-display-to-real cand)))
+
 (defvar f3-find-process-source
   (helm-build-async-source "find"
     :candidates-process #'f3-make-process
     :candidate-number-limit f3-candidate-limit
-    :action (helm-make-actions "Visit" #'switch-to-buffer)
-    :persistent-action #'f3-buffer-persistent-action
+    :action (helm-make-actions "Visit" #'f3-async-action)
+    :persistent-action #'f3-async-persistent-action
     :filter-one-by-one #'f3-async-filter-function
-    :display-to-real #'f3-async-display-to-real
     :cleanup #'f3-clear-opened-persistent-buffers)
   "Source searching files within a given directory using the find command.")
 
