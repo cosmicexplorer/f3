@@ -199,7 +199,7 @@ side."
      (append (list "-not" "(") (f3-parsed-to-command thing) (list ")")))
     (`(:paren ,thing) (append (list "(") thing (list ")")))
     ;; modes
-    (`(:text ,thing) (f3-maybe-lowercase-generate "name" thing))
+    (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
     (`(:raw ,thing) (append (list "(") thing (list ")")))
     (`(:filetype ,thing) (list "-type" thing))
