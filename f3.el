@@ -66,6 +66,9 @@ returning a directory path."
 (defconst f3-err-buf-name "*f3-errors*")
 (defconst f3-err-msg-props '(font-lock-warning-face :height 2.0))
 
+(defconst f3-start-anchors '("\\`" "^"))
+(defconst f3-end-anchors '("\\'" "$"))
+
 
 ;; Global variables
 (defvar f3-current-combinator nil)
@@ -122,6 +125,23 @@ returning a directory path."
         (list :text (format "*%s*" pat)))
       texts))))
 
+(defun f3-dot-star-unless-anchor (pat)
+  "Surround PAT with '.*' on both sides, unless PAT has an anchor on either
+side."
+  (let ((start-pat
+         (if (cl-some
+              (lambda (anch)
+                (string-match-p (concat "\\`" (regexp-quote anch)) pat))
+              f3-start-anchors)
+             pat
+           (concat ".*" pat))))
+    (if (cl-some
+         (lambda (anch)
+           (string-match-p (concat (regexp-quote anch) "\\'") start-pat))
+         f3-end-anchors)
+        start-pat
+      (concat start-pat ".*"))))
+
 (defun f3-create-regex-pattern (pat)
   (let ((texts (helm-mm-3-get-patterns pat)))
     (cl-reduce
@@ -129,7 +149,7 @@ returning a directory path."
      (cl-mapcar
       (lambda (pat)
         (cl-destructuring-bind (pred . reg) pat
-          (let ((real-reg (format "\\(\\`\\|.*\\)%s\\(.*\\|\\'\\)" reg)))
+          (let ((real-reg (f3-dot-star-unless-anchor reg)))
             (if (eq pred 'identity)
                 `(:regex ,real-reg)
               `(:not (:regex ,real-reg))))))
@@ -179,7 +199,7 @@ returning a directory path."
      (append (list "-not" "(") (f3-parsed-to-command thing) (list ")")))
     (`(:paren ,thing) (append (list "(") thing (list ")")))
     ;; modes
-    (`(:text ,thing) (f3-maybe-lowercase-generate "name" thing))
+    (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
     (`(:raw ,thing) (append (list "(") thing (list ")")))
     (`(:filetype ,thing) (list "-type" thing))
