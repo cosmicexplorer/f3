@@ -20,8 +20,8 @@ Find files fast, using helm. It'll be cool, trust me.
 - bust out keybindings for set intersections and then running commands
 - these keybindings interpret the current pattern as an "and" pattern as shown above and then clear `helm-pattern` to eventually build a `find` command line
     - combinators: these set `f3-current-combinator`, take the current pattern as word, and reset helm
-        - <kbd>M-*</kbd> = union ("or")
-        - <kbd>M-+</kbd> = intersection ("and")
+        - <kbd>M-+</kbd> = union ("or")
+        - <kbd>M-*</kbd> = intersection ("and")
     - groupings: these call `f3-(open/close)-paren` and reset helm
         - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
         - <kbd>M-)</kbd> = close paren
