@@ -24,7 +24,7 @@
 ;; Customization
 (defgroup f3 nil "Group for `f3' customizations.")
 
-(defcustom f3-default-mode :regex
+(defcustom f3-default-mode :text
   "Default input mode for `f3' patterns."
   :type 'symbol
   :group 'f3)
