@@ -113,6 +113,11 @@ are killed at the end of a session.")
 (defvar f3-source-buffer nil
   "Buffer which is current when `f3' is invoked.")
 
+(defvar f3-current-operator-stack nil
+  "Current stream of parsed operators.")
+
+(defvar f3-current-redo-stack nil
+  "Current stream of parsed operators along with any hanging after undos.")
 
 
 ;; Buffer-local variables
@@ -123,10 +128,10 @@ are killed at the end of a session.")
 (defun f3-create-text-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
     (cl-reduce
-     (lambda (parsed1 parsed2) (list :and parsed1 parsed2))
+     (lambda (parsed1 parsed2) `(:and ,parsed1 ,parsed2))
      (cl-mapcar
       (lambda (pat)
-        (list :text (format "*%s*" pat)))
+        `(:text ,(format "*%s*" pat)))
       texts))))
 
 (defun f3-dot-star-unless-anchor (pat)
@@ -151,7 +156,7 @@ side."
 (defun f3-create-regex-pattern (pat)
   (let ((texts (helm-mm-3-get-patterns pat)))
     (cl-reduce
-     (lambda (parsed1 parsed2) (list :and parsed1 parsed2))
+     (lambda (parsed1 parsed2) `(:and ,parsed1 ,parsed2))
      (cl-mapcar
       (lambda (pat)
         (cl-destructuring-bind (pred . reg) pat
@@ -167,13 +172,13 @@ side."
          (cl-mapcar
           (lambda (str) (replace-regexp-in-string "\\`['\"]\\|['\"]\\'" "" str))
           (helm-mm-split-pattern pat))))
-    (list :raw split-pattern)))
+    `(:raw ,split-pattern)))
 
 (defun f3-create-filetype-pattern (pat)
-  (list :filetype pat))
+  `(:filetype ,pat))
 
 (defun f3-do-complement (ast do-complement)
-  (if do-complement (list :not ast) ast))
+  (if do-complement `(:not ,ast) ast))
 
 (defun f3-pattern-to-parsed-arg (pattern mode complement)
   (let ((process-input-fn (cdr (assoc mode f3-input-modes))))
@@ -193,22 +198,19 @@ side."
     ;; operators
     (`(:and . ,args)
      (cl-reduce (lambda (arg1 arg2)
-                  (append (list "(") arg1 (list ")" "-and")
-                          (list "(") arg2 (list ")")))
+                  `("(" ,@arg1 ")" "-and" "(" ,@arg2 ")"))
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:or . ,args)
      (cl-reduce (lambda (arg1 arg2)
-                  (append (list "(") arg1 (list ")" "-or")
-                          (list "(") arg2 (list ")")))
+                  `("(" ,@arg1 ")" "-or" "(" ,@arg2 ")"))
                 (cl-mapcar #'f3-parsed-to-command args)))
-    (`(:not ,thing)
-     (append (list "-not" "(") (f3-parsed-to-command thing) (list ")")))
-    (`(:paren ,thing) (append (list "(") thing (list ")")))
+    (`(:not ,thing) `("-not" "(" ,@(f3-parsed-to-command thing) ")"))
+    (`(:paren ,thing) `("(" ,@thing ")"))
     ;; modes
     (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
-    (`(:raw ,thing) (append (list "(") thing (list ")")))
-    (`(:filetype ,thing) (list "-type" thing))
+    (`(:raw ,thing) `("(" ,@thing ")"))
+    (`(:filetype ,thing) `("-type" ,@thing))
     (_ (error (format "cannot comprehend arguments %S" parsed-args)))))
 
 (defun f3-get-buffer-names ()
@@ -221,15 +223,17 @@ side."
   (switch-to-buffer buf))
 
 (defun f3-get-ast ()
-  (let* ((current-pattern
-          (unless (string-empty-p helm-pattern)
-            (f3-pattern-to-parsed-arg
-             helm-pattern f3-current-mode f3-current-complement))))
-    (or (and f3-current-command current-pattern
-             (list f3-current-combinator f3-current-command
-                   current-pattern))
-        f3-current-command
-        current-pattern)))
+  (let ((current-pattern
+         (unless (string-empty-p helm-pattern)
+           (f3-pattern-to-parsed-arg
+            helm-pattern f3-current-mode f3-current-complement))))
+    (cl-reduce
+     (lambda (atom cur-pat)
+       (cl-destructuring-bind (comb . chunk) atom
+         ;; if the current list is nil, just use the atom, else combine
+         (if cur-pat (list comb chunk cur-pat) chunk)))
+     f3-current-operator-stack
+     :initial-value current-pattern)))
 
 (defun f3-filter-buffer-candidates (cand)
   (cl-case f3-current-mode
@@ -245,8 +249,7 @@ side."
     (when final-pat
       (with-current-buffer f3-source-buffer
         ;; n.b.: `f3-async-filter-function' depends upon the "." literal
-        (let* ((args (append (list f3-find-program ".")
-                             (f3-parsed-to-command final-pat)))
+        (let* ((args `(,f3-find-program "." ,@(f3-parsed-to-command final-pat)))
                (default-directory f3-cached-dir)
                (err-proc (make-pipe-process
                           :name f3-err-proc-name
@@ -347,18 +350,24 @@ side."
   (lambda ()
     (interactive)
     (f3-run-after-exit
-     (setq f3-current-mode mode)
-     (f3-do f3-cached-dir f3-current-command helm-pattern))))
+     (let ((f3-current-mode mode))
+       (f3-do f3-cached-dir f3-current-command helm-pattern)))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
-;;; dump to a dired buffer
+;;; dump to a REAL dired buffer
+;;; TODO: add "use previous find command" command to use
+;;; run-{lisp,shell}{,-interactively} or to just list files
+;;; TODO: run-lisp-interactively could read in an expression which resolves to a
+;;; function or lambda (accepting either each file individually or the entire
+;;; list) and attach itself to a process filter or sentinel to get nonblocking
+;;; results that fill in as you type
 
 (defun f3-toggle-complement ()
   (interactive)
   (f3-run-after-exit
-   (setq f3-current-complement (not f3-current-complement))
-   (f3-do f3-cached-dir f3-current-command helm-pattern)))
+   (let ((f3-current-complement (not f3-current-complement)))
+     (f3-do f3-cached-dir f3-current-command helm-pattern))))
 
 (defun f3-do (start-dir prev-cmd &optional initial-input)
   (let ((f3-current-command prev-cmd)
@@ -402,7 +411,9 @@ side."
   (interactive (list (f3-choose-dir)))
   (let ((f3-source-buffer (current-buffer))
         (f3-current-mode f3-default-mode)
-        (f3-current-complement nil))
+        (f3-current-complement nil)
+        (f3-current-operator-stack nil)
+        (f3-current-redo-stack nil))
     (f3-do start-dir nil)))
 
 (provide 'f3)

@@ -35,7 +35,7 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-q</kbd> = toggle complement (current)
     - actions
         - <kbd>M-g</kbd> = run command on results in new `*Async Shell Command*` buffer and close helm
-        - <kbd>M-l</kbd> = exit helm and list the files in a dired buffer
+        - <kbd>M-l</kbd> = exit helm and list the files in a REAL dired buffer
         - <kbd>RET</kbd> = visit
         - <kbd>TAB</kbd> = preview
     - meta
