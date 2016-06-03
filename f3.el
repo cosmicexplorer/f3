@@ -2,8 +2,8 @@
 
 ;; Author: Danny McClanahan <danieldmcclanahan@gmail.com>
 ;; Version 0.1
-;; Package-Requires: ((emacs "24") (helm "1.9.6"))
-;; Keywords: find, files, helm
+;; Package-Requires: ((emacs "24") (helm "1.9.6") (cl-lib "0.5"))
+;; Keywords: find, file, files, helm, fast, finder
 
 
 ;;; Commentary:
@@ -17,7 +17,7 @@
 
 (require 'cl-lib)
 (require 'helm)
-(require 'helm-utils)
+(require 'helm-multi-match)
 (require 'subr-x)
 
 
@@ -71,19 +71,18 @@ returning a directory path."
 
 
 ;; Global variables
-(defvar f3-current-combinator nil)
-
-(defvar f3-current-mode f3-default-mode)
+(defvar f3-current-mode)
 
 ;;; TODO: restart `helm-pattern' with whatever was in it before `f3-open-paren'
 ;;; or `f3-close-paren' was called, after calling it
-(defvar f3-current-complement nil)
+(defvar f3-current-complement)
 
 (defvar f3-current-command nil)
 
 ;;; TODO: switch this off whenever a combinator is turned on
 (defvar f3-match-buffers t
-  "Whether to match buffers as well as async find results.")
+  "Whether to match buffers as well as async find results. Starts on, turned off
+within a session after a combinator is used.")
 
 (defvar f3-buffer-source
   (helm-build-sync-source "open buffers"
@@ -94,7 +93,9 @@ returning a directory path."
     :persistent-action #'f3-buffer-persistent-action)
   "Source searching currently open buffer names for results.")
 
-(defvar f3-currently-opened-persistent-buffers nil)
+(defvar f3-currently-opened-persistent-buffers nil
+  "The buffers opened through a persistent action within an `f3' session. These
+are killed at the end of a session.")
 
 (defvar f3-find-process-source
   (helm-build-async-source "find"
@@ -106,9 +107,12 @@ returning a directory path."
     :cleanup #'f3-clear-opened-persistent-buffers)
   "Source searching files within a given directory using the find command.")
 
-(defvar f3-last-selected-candidate nil)
+(defvar f3-last-selected-candidate nil
+  "Buffer which was last selected through `f3'.")
 
-(defvar f3-source-buffer nil)
+(defvar f3-source-buffer nil
+  "Buffer which is current when `f3' is invoked.")
+
 
 
 ;; Buffer-local variables
@@ -322,8 +326,7 @@ side."
                   (t default-directory)))))))
 
 (defmacro f3-run-after-exit (&rest body)
-  `(helm-run-after-exit
-    (lambda () ,@body)))
+  `(helm-run-after-exit (lambda () ,@body)))
 
 (defun f3-choose-dir-and-rerun (dir-fun)
   (lambda ()
@@ -389,7 +392,6 @@ side."
 
 
 ;; Autoloaded functions
-
 ;;;###autoload
 (defun f3 (start-dir)
   (interactive (list (f3-choose-dir)))
