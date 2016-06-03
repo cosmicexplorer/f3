@@ -193,6 +193,9 @@ side."
         (list (format "-%s" base) pat)
       (list (format "-i%s" base) pat))))
 
+;;; TODO: fix helm's automatic highlighting of results; maybe use some logic in
+;;; `f3-filter-buffer-candidates'?
+
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
   (pcase parsed-args
@@ -206,7 +209,7 @@ side."
                   `("(" ,@arg1 ")" "-or" "(" ,@arg2 ")"))
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:not ,thing) `("-not" "(" ,@(f3-parsed-to-command thing) ")"))
-    (`(:paren ,thing) `("(" ,@thing ")"))
+    (`(:paren ,thing) `("(" ,@(f3-parsed-to-command thing) ")"))
     ;; modes
     (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
