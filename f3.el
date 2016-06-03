@@ -344,12 +344,11 @@ side."
        (f3-do f3-cached-dir f3-current-command helm-pattern)))))
 
 (defun f3-set-mode-and-rerun (mode)
-  (let ((run-mode mode))
-    (lambda ()
-      (interactive)
-      (f3-run-after-exit
-       (setq f3-current-mode run-mode)
-       (f3-do f3-cached-dir f3-current-command helm-pattern)))))
+  (lambda ()
+    (interactive)
+    (f3-run-after-exit
+     (setq f3-current-mode mode)
+     (f3-do f3-cached-dir f3-current-command helm-pattern))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
