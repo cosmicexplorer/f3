@@ -89,7 +89,7 @@ within a session after a combinator is used.")
     :candidates #'f3-get-buffer-names
     :match-strict #'f3-filter-buffer-candidates
     :candidate-number-limit f3-candidate-limit
-    :action (helm-make-actions "Visit" #'switch-to-buffer)
+    :action (helm-make-actions "Visit" #'f3-sync-action)
     :persistent-action #'f3-buffer-persistent-action)
   "Source searching currently open buffer names for results.")
 
@@ -135,13 +135,15 @@ side."
   (let ((start-pat
          (if (cl-some
               (lambda (anch)
-                (string-match-p (concat "\\`" (regexp-quote anch)) pat))
+                (let ((case-fold-search nil))
+                  (string-match-p (concat "\\`" (regexp-quote anch)) pat)))
               f3-start-anchors)
              pat
            (concat ".*" pat))))
     (if (cl-some
          (lambda (anch)
-           (string-match-p (concat (regexp-quote anch) "\\'") start-pat))
+           (let ((case-fold-search nil))
+             (string-match-p (concat (regexp-quote anch) "\\'") start-pat)))
          f3-end-anchors)
         start-pat
       (concat start-pat ".*"))))
@@ -179,11 +181,11 @@ side."
         (f3-do-complement (funcall process-input-fn pattern) complement)
       (error (format "%s '%S'" "invalid mode" mode)))))
 
-;;; TODO: do i?wholename and friends as well
 (defun f3-maybe-lowercase-generate (base pat)
-  (if (string-match-p "[[:upper:]]" pat)
-      (list (format "-%s" base) pat)
-    (list (format "-i%s" base) pat)))
+  (let ((case-fold-search nil))
+    (if (string-match-p "[[:upper:]]" pat)
+        (list (format "-%s" base) pat)
+      (list (format "-i%s" base) pat))))
 
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
@@ -281,24 +283,29 @@ side."
   (cl-mapc #'kill-buffer f3-currently-opened-persistent-buffers)
   (setq f3-currently-opened-persistent-buffers nil))
 
+(defun f3-sync-action (buf)
+  (setq f3-last-selected-candidate buf)
+  (switch-to-buffer buf))
+
 (defun f3-async-filter-function (cand)
   "Remove leading './' from candidate CAND."
   (replace-regexp-in-string "\\`\\./" "" cand))
 
-(defun f3-async-display-to-real (cand)
+(defun f3-async-display-to-real (cand &optional persistent)
   (with-current-buffer f3-source-buffer
     (let* ((default-directory f3-cached-dir)
            (buf (find-buffer-visiting cand)))
       (unless buf
         (setq buf (find-file cand))
-        (push buf f3-currently-opened-persistent-buffers))
+        (when persistent
+          (push buf f3-currently-opened-persistent-buffers)))
       buf)))
 
 (defun f3-async-persistent-action (cand)
-  (f3-buffer-persistent-action (f3-async-display-to-real cand)))
+  (f3-buffer-persistent-action (f3-async-display-to-real cand t)))
 
 (defun f3-async-action (cand)
-  (switch-to-buffer (f3-async-display-to-real cand)))
+  (f3-sync-action (f3-async-display-to-real cand)))
 
 ;;; TODO: implement this!!! use some external library
 (defun f3-use-project-dir (from)
@@ -358,19 +365,18 @@ side."
   (let ((f3-current-command prev-cmd)
         (f3-buffer-matcher nil)
         (last-cand
-         (and (stringp f3-last-selected-candidate)
-              (buffer-live-p (get-buffer f3-last-selected-candidate))
-              f3-last-selected-candidate))
+         (if (buffer-live-p f3-last-selected-candidate)
+             (buffer-name f3-last-selected-candidate)
+           (setq f3-last-selected-candidate nil)))
         (prompt (format "%s%s: "
                         (if f3-current-complement "(not) " "")
                         (substring (symbol-name f3-current-mode) 1))))
-    (setq f3-last-selected-candidate
-          (helm :sources '(f3-find-process-source f3-buffer-source)
-                :buffer f3-helm-buffer-name
-                :input (or initial-input "")
-                :preselect last-cand
-                :prompt prompt
-                :keymap f3-map))))
+    (helm :sources '(f3-find-process-source f3-buffer-source)
+          :buffer f3-helm-buffer-name
+          :input (or initial-input "")
+          :preselect last-cand
+          :prompt prompt
+          :keymap f3-map)))
 
 
 ;; Keymap
