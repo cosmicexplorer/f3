@@ -169,9 +169,10 @@ side."
 (defun f3-create-raw-pattern (pat)
   "Assumes correctness of pattern PAT."
   (let ((split-pattern
-         (cl-mapcar
-          (lambda (str) (replace-regexp-in-string "\\`['\"]\\|['\"]\\'" "" str))
-          (helm-mm-split-pattern pat))))
+         (with-temp-buffer
+           (push-mark)
+           (insert pat)
+           (car (shell--parse-pcomplete-arguments)))))
     `(:raw ,split-pattern)))
 
 (defun f3-create-filetype-pattern (pat)
