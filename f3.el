@@ -202,18 +202,18 @@ side."
     ;; operators
     (`(:and . ,args)
      (cl-reduce (lambda (arg1 arg2)
-                  `("(" ,@arg1 ")" "-and" "(" ,@arg2 ")"))
+                  `(,@arg1 "-and" ,@arg2))
                 (cl-mapcar #'f3-parsed-to-command args)))
     (`(:or . ,args)
      (cl-reduce (lambda (arg1 arg2)
-                  `("(" ,@arg1 ")" "-or" "(" ,@arg2 ")"))
+                  `(,@arg1 "-or" ,@arg2))
                 (cl-mapcar #'f3-parsed-to-command args)))
-    (`(:not ,thing) `("-not" "(" ,@(f3-parsed-to-command thing) ")"))
+    (`(:not ,thing) `("-not" ,@(f3-parsed-to-command thing)))
     (`(:paren ,thing) `("(" ,@(f3-parsed-to-command thing) ")"))
     ;; modes
     (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
-    (`(:raw ,thing) `("(" ,@thing ")"))
+    (`(:raw ,thing) thing)
     (`(:filetype ,thing) `("-type" ,@thing))
     (_ (error (format "cannot comprehend arguments %S" parsed-args)))))
 
@@ -241,10 +241,7 @@ side."
 
 (defun f3-filter-buffer-candidates (cand)
   (cl-case f3-current-mode
-    (:text (helm-mm-3-match
-            cand
-            (replace-regexp-in-string
-             "\\(\\s-*\\)!" "\\1\\\\!" (regexp-quote helm-pattern))))
+    (:text (helm-mm-3-match cand (regexp-quote helm-pattern)))
     (:regex (helm-mm-3-match cand helm-pattern))
     (t nil)))
 
