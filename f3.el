@@ -244,15 +244,16 @@ side."
    for cur-stack = operator-stack then (cdr cur-stack)
    for cur-atom = (car cur-stack)
    for cur-op = (car cur-atom)
+   for cur-res = (cdr cur-atom)
    with ret = nil
    until (or (null cur-stack) (eq cur-op :left-paren))
-   do (if (eq cur-op :right-paren)
+   do (if (eq cur-res :right-paren)
           (let* ((res (f3-get-ast-upto-paren (cdr cur-stack)))
-                 (after-stack (car result))
-                 (result (cdr result)))
+                 (after-stack (car res))
+                 (result (cdr res)))
             ;; this is correct whether after-stack is null or :left-paren
             (setq cur-stack after-stack)
-            (push result `(:paren ,ret)))
+            (push ret (cons cur-res `(:paren ,ret))))
         (push cur-atom ret))
    finally return (cons cur-stack (f3-reduce-nonparen-ops (reverse ret) start))))
 
@@ -302,6 +303,7 @@ side."
                  (with-current-buffer (process-buffer proc) (insert ev))
                (with-current-buffer (helm-buffer-get)
                  (erase-buffer)
+                 ;; TODO: remove results from the async source if this happens
                  (let ((err-msg (propertize "find failed with error:"
                                             'face f3-err-msg-props)))
                    (insert (format "%s\n%s" err-msg ev)))))))
@@ -413,6 +415,20 @@ side."
          f3-current-operator-stack)
    (f3-do)))
 
+;;; TODO: fix left paren usage
+(defun f3-left-paren ()
+  (interactive)
+  (f3-run-after-exit
+   (push (list :left-paren) f3-current-operator-stack)
+   (f3-do helm-pattern)))
+
+(defun f3-right-paren (comb)
+  (lambda ()
+    (interactive)
+    (f3-run-after-exit
+     (push (list comb :right-paren) f3-current-operator-stack)
+     (f3-do helm-pattern))))
+
 (defun f3-do (&optional initial-input)
   (let ((last-cand
          (if (buffer-live-p f3-last-selected-candidate)
@@ -445,6 +461,9 @@ side."
     (define-key map (kbd "M-q") #'f3-toggle-complement)
     (define-key map (kbd "M-+") #'f3-attach-union)
     (define-key map (kbd "M-*") #'f3-attach-intersection)
+    (define-key map (kbd "M-(") #'f3-left-paren)
+    (define-key map (kbd "M-) M-+") (f3-right-paren :or))
+    (define-key map (kbd "M-) M-*") (f3-right-paren :and))
     map)
   "Keymap for `f3'.")
 
