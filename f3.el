@@ -181,11 +181,12 @@ side."
 (defun f3-do-complement (ast do-complement)
   (if do-complement `(:not ,ast) ast))
 
-(defun f3-pattern-to-parsed-arg (pattern mode complement)
-  (let ((process-input-fn (cdr (assoc mode f3-input-modes))))
+(defun f3-pattern-to-parsed-arg (pattern)
+  (let ((process-input-fn (cdr (assoc f3-current-mode f3-input-modes))))
     (if process-input-fn
-        (f3-do-complement (funcall process-input-fn pattern) complement)
-      (error (format "%s '%S'" "invalid mode" mode)))))
+        (f3-do-complement (funcall process-input-fn pattern)
+                          f3-current-complement)
+      (error (format "%s '%S'" "invalid mode" f3-current-mode)))))
 
 (defun f3-maybe-lowercase-generate (base pat)
   (let ((case-fold-search nil))
@@ -226,18 +227,50 @@ side."
 (defun f3-buffer-persistent-action (buf)
   (switch-to-buffer buf))
 
+(defun f3-reduce-nonparen-ops (ops-list start)
+  (cl-reduce
+   (lambda (cur-pat atom)
+     ;; if the current list is nil, just use the atom, else combine
+     (let ((comb (car atom))
+           (chunk (cdr atom)))
+       (if cur-pat (append (list comb chunk)
+                           (list cur-pat))
+         chunk)))
+   ops-list
+   :initial-value start))
+
+(defun f3-get-ast-upto-paren (operator-stack &optional start)
+  (cl-loop
+   for cur-stack = operator-stack then (cdr cur-stack)
+   for cur-atom = (car cur-stack)
+   for cur-op = (car cur-atom)
+   with ret = nil
+   until (or (null cur-stack) (eq cur-op :left-paren))
+   do (if (eq cur-op :right-paren)
+          (let* ((res (f3-get-ast-upto-paren (cdr cur-stack)))
+                 (after-stack (car result))
+                 (result (cdr result)))
+            ;; this is correct whether after-stack is null or :left-paren
+            (setq cur-stack after-stack)
+            (push result `(:paren ,ret)))
+        (push cur-atom ret))
+   finally return (cons cur-stack (f3-reduce-nonparen-ops (reverse ret) start))))
+
+(defun f3-parse-full-stack (operator-stack start)
+  (cl-loop
+   for cur-start = start then cur
+   with rest-stack = operator-stack
+   for (rest . cur) = (f3-get-ast-upto-paren operator-stack cur-start)
+   while rest
+   do (setq rest-stack (cdr rest))
+   finally return cur))
+
 (defun f3-get-ast ()
   (let ((current-pattern
          (unless (string-empty-p helm-pattern)
-           (f3-pattern-to-parsed-arg
-            helm-pattern f3-current-mode f3-current-complement))))
-    (cl-reduce
-     (lambda (atom cur-pat)
-       (cl-destructuring-bind (comb . chunk) atom
-         ;; if the current list is nil, just use the atom, else combine
-         (if cur-pat (list comb chunk cur-pat) chunk)))
-     f3-current-operator-stack
-     :initial-value current-pattern)))
+           (f3-pattern-to-parsed-arg helm-pattern))))
+    (message "stack: %S, h-p: %s" f3-current-operator-stack helm-pattern)
+    (f3-parse-full-stack f3-current-operator-stack current-pattern)))
 
 (defun f3-filter-buffer-candidates (cand)
   (cl-case f3-current-mode
@@ -273,14 +306,10 @@ side."
                                             'face f3-err-msg-props)))
                    (insert (format "%s\n%s" err-msg ev)))))))
           (helm-attrset
-           'name
-           (format
-            "%s: %s"
-            f3-cached-dir
-            (mapconcat #'identity args " "))
+           'name (format "%s: %s" f3-cached-dir (mapconcat #'identity args " "))
            f3-find-process-source)
-          (message "default-directory: %s, args: %S, mode: %S, ast: %S"
-                   default-directory args f3-current-mode final-pat)
+          (message "default-directory: %s, args: %S, mode: %S, ast: %S, stack: %S"
+                   default-directory args f3-current-mode final-pat f3-current-operator-stack)
           real-proc)))))
 
 (defun f3-clear-opened-persistent-buffers ()
@@ -344,15 +373,15 @@ side."
     (interactive)
     (with-current-buffer f3-source-buffer
       (f3-run-after-exit
-       (setq f3-cached-dir (funcall dir-fun f3-cached-dir))
-       (f3-do f3-cached-dir f3-current-command helm-pattern)))))
+       (let ((f3-cached-dir (funcall dir-fun f3-cached-dir)))
+         (f3-do helm-pattern))))))
 
 (defun f3-set-mode-and-rerun (mode)
   (lambda ()
     (interactive)
     (f3-run-after-exit
      (let ((f3-current-mode mode))
-       (f3-do f3-cached-dir f3-current-command helm-pattern)))))
+       (f3-do helm-pattern)))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
@@ -368,12 +397,24 @@ side."
   (interactive)
   (f3-run-after-exit
    (let ((f3-current-complement (not f3-current-complement)))
-     (f3-do f3-cached-dir f3-current-command helm-pattern))))
+     (f3-do helm-pattern))))
 
-(defun f3-do (start-dir prev-cmd &optional initial-input)
-  (let ((f3-current-command prev-cmd)
-        (f3-buffer-matcher nil)
-        (last-cand
+(defun f3-attach-union ()
+  (interactive)
+  (f3-run-after-exit
+   (push (cons :or (f3-pattern-to-parsed-arg helm-pattern))
+         f3-current-operator-stack)
+   (f3-do)))
+
+(defun f3-attach-intersection ()
+  (interactive)
+  (f3-run-after-exit
+   (push (cons :and (f3-pattern-to-parsed-arg helm-pattern))
+         f3-current-operator-stack)
+   (f3-do)))
+
+(defun f3-do (&optional initial-input)
+  (let ((last-cand
          (if (buffer-live-p f3-last-selected-candidate)
              (buffer-name f3-last-selected-candidate)
            (setq f3-last-selected-candidate nil)))
@@ -402,6 +443,8 @@ side."
     (define-key map (kbd "M-f") (f3-set-mode-and-rerun :raw))
     (define-key map (kbd "M-d") (f3-set-mode-and-rerun :filetype))
     (define-key map (kbd "M-q") #'f3-toggle-complement)
+    (define-key map (kbd "M-+") #'f3-attach-union)
+    (define-key map (kbd "M-*") #'f3-attach-intersection)
     map)
   "Keymap for `f3'.")
 
@@ -415,7 +458,7 @@ side."
         (f3-current-complement nil)
         (f3-current-operator-stack nil)
         (f3-current-redo-stack nil))
-    (f3-do start-dir nil)))
+    (f3-do)))
 
 (provide 'f3)
 ;;; f3.el ends here
