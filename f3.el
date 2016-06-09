@@ -251,11 +251,12 @@ side."
           (let* ((res (f3-get-ast-upto-paren (cdr cur-stack)))
                  (after-stack (car res))
                  (result (cdr res)))
-            ;; this is correct whether after-stack is null or :left-paren
+            ;; this is correct whether after-stack is nil or :left-paren
             (setq cur-stack after-stack)
             (push ret (cons cur-res `(:paren ,ret))))
         (push cur-atom ret))
-   finally return (cons cur-stack (f3-reduce-nonparen-ops (reverse ret) start))))
+   finally return (cons cur-stack
+                        (f3-reduce-nonparen-ops (reverse ret) start))))
 
 (defun f3-parse-full-stack (operator-stack start)
   (cl-loop
@@ -419,7 +420,6 @@ side."
          (f3-match-buffers nil))
      (f3-do))))
 
-;;; TODO: fix left paren usage
 (defun f3-left-paren ()
   (interactive)
   (f3-run-after-exit
@@ -432,11 +432,14 @@ side."
   (lambda ()
     (interactive)
     (f3-run-after-exit
+     ;; TODO: insert current pattern in there somewhere; should be able to
+     ;; insert WITHOUT a combinator since this is the FIRST of the current paren
+     ;; stack (the initial value of the reduce)
      (let ((f3-current-operator-stack
             (cons (list comb :right-paren)
                   f3-current-operator-stack))
            (f3-match-buffers nil))
-       (f3-do helm-pattern)))))
+       (f3-do)))))
 
 (defun f3-do (&optional initial-input)
   (let ((last-cand
