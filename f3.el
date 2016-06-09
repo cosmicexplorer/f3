@@ -68,18 +68,17 @@ returning a directory path."
 
 (defconst f3-start-anchors '("\\`" "^"))
 (defconst f3-end-anchors '("\\'" "$"))
+(defconst f3-shell-wildcards '("*"))
 
 
 ;; Global variables
 (defvar f3-current-mode)
 
-;;; TODO: restart `helm-pattern' with whatever was in it before `f3-open-paren'
-;;; or `f3-close-paren' was called, after calling it
+;;; TODO: add -perm!
 (defvar f3-current-complement)
 
 (defvar f3-current-command nil)
 
-;;; TODO: switch this off whenever a combinator is turned on
 (defvar f3-match-buffers t
   "Whether to match buffers as well as async find results. Starts on, turned off
 within a session after a combinator is used.")
@@ -125,33 +124,40 @@ are killed at the end of a session.")
 
 
 ;; Functions
+(defun f3-wildcard-unless-meta (pat start-anchors end-anchors insert)
+  "Surround PAT with INSERT on both sides, unless PAT has an anchor on either
+side (as denoted by lists START-ANCHORS and END-ANCHORS)."
+  (let ((start-pat
+         (if (cl-some
+              (lambda (anch)
+                (let ((case-fold-search nil))
+                  (string-match-p (concat "\\`" (regexp-quote anch)) pat)))
+              start-anchors)
+             pat
+           (concat insert pat))))
+    (if (cl-some
+         (lambda (anch)
+           (let ((case-fold-search nil))
+             (string-match-p (concat (regexp-quote anch) "\\'") start-pat)))
+         end-anchors)
+        start-pat
+      (concat start-pat insert))))
+
+(defun f3-shell-expansion-unless-wildcard (pat)
+  (f3-wildcard-unless-meta pat f3-shell-wildcards f3-shell-wildcards "*"))
+
+;;; TODO: allow user to input find text functions
 (defun f3-create-text-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
     (cl-reduce
      (lambda (parsed1 parsed2) `(:and ,parsed1 ,parsed2))
      (cl-mapcar
       (lambda (pat)
-        `(:text ,(format "*%s*" pat)))
+        `(:text ,(f3-shell-expansion-unless-wildcard pat)))
       texts))))
 
 (defun f3-dot-star-unless-anchor (pat)
-  "Surround PAT with '.*' on both sides, unless PAT has an anchor on either
-side."
-  (let ((start-pat
-         (if (cl-some
-              (lambda (anch)
-                (let ((case-fold-search nil))
-                  (string-match-p (concat "\\`" (regexp-quote anch)) pat)))
-              f3-start-anchors)
-             pat
-           (concat ".*" pat))))
-    (if (cl-some
-         (lambda (anch)
-           (let ((case-fold-search nil))
-             (string-match-p (concat (regexp-quote anch) "\\'") start-pat)))
-         f3-end-anchors)
-        start-pat
-      (concat start-pat ".*"))))
+  (f3-wildcard-unless-meta pat f3-start-anchors f3-end-anchors ".*"))
 
 (defun f3-create-regex-pattern (pat)
   (let ((texts (helm-mm-3-get-patterns pat)))
@@ -196,7 +202,6 @@ side."
 
 ;;; TODO: fix helm's automatic highlighting of results; maybe use some logic in
 ;;; `f3-filter-buffer-candidates'?
-
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
   (pcase parsed-args
