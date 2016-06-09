@@ -215,7 +215,7 @@ side."
     (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
     (`(:raw ,thing) thing)
-    (`(:filetype ,thing) `("-type" ,@thing))
+    (`(:filetype ,thing) `("-type" ,thing))
     (_ (error (format "cannot comprehend arguments %S" parsed-args)))))
 
 (defun f3-get-buffer-names ()
@@ -404,30 +404,39 @@ side."
 (defun f3-attach-union ()
   (interactive)
   (f3-run-after-exit
-   (push (cons :or (f3-pattern-to-parsed-arg helm-pattern))
-         f3-current-operator-stack)
-   (f3-do)))
+   (let ((f3-current-operator-stack
+          (cons (cons :or (f3-pattern-to-parsed-arg helm-pattern))
+                f3-current-operator-stack))
+         (f3-match-buffers nil))
+     (f3-do))))
 
 (defun f3-attach-intersection ()
   (interactive)
   (f3-run-after-exit
-   (push (cons :and (f3-pattern-to-parsed-arg helm-pattern))
-         f3-current-operator-stack)
-   (f3-do)))
+   (let ((f3-current-operator-stack
+          (cons (cons :and (f3-pattern-to-parsed-arg helm-pattern))
+                f3-current-operator-stack))
+         (f3-match-buffers nil))
+     (f3-do))))
 
 ;;; TODO: fix left paren usage
 (defun f3-left-paren ()
   (interactive)
   (f3-run-after-exit
-   (push (list :left-paren) f3-current-operator-stack)
-   (f3-do helm-pattern)))
+   (let ((f3-current-operator-stack
+          (cons (list :left-paren) f3-current-operator-stack))
+         (f3-match-buffers nil))
+     (f3-do helm-pattern))))
 
 (defun f3-right-paren (comb)
   (lambda ()
     (interactive)
     (f3-run-after-exit
-     (push (list comb :right-paren) f3-current-operator-stack)
-     (f3-do helm-pattern))))
+     (let ((f3-current-operator-stack
+            (cons (list comb :right-paren)
+                  f3-current-operator-stack))
+           (f3-match-buffers nil))
+       (f3-do helm-pattern)))))
 
 (defun f3-do (&optional initial-input)
   (let ((last-cand
@@ -476,7 +485,8 @@ side."
         (f3-current-mode f3-default-mode)
         (f3-current-complement nil)
         (f3-current-operator-stack nil)
-        (f3-current-redo-stack nil))
+        (f3-current-redo-stack nil)
+        (f3-match-buffers t))
     (f3-do)))
 
 (provide 'f3)
