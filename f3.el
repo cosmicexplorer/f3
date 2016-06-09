@@ -212,7 +212,7 @@ side."
     (`(:not ,thing) `("-not" ,@(f3-parsed-to-command thing)))
     (`(:paren ,thing) `("(" ,@(f3-parsed-to-command thing) ")"))
     ;; modes
-    (`(:text ,thing) (f3-maybe-lowercase-generate "wholename" thing))
+    (`(:text ,thing) (f3-maybe-lowercase-generate "path" thing))
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
     (`(:raw ,thing) thing)
     (`(:filetype ,thing) `("-type" ,thing))
