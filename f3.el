@@ -234,21 +234,24 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-reduce-atom-and-cons (an-atom comb new-atom)
   (if an-atom (list comb new-atom an-atom) new-atom))
 
-(defun f3-parse-upto-left-paren-or-end (init syntax-list)
+(defun f3-parse-upto-left-paren-or-end (reduced left)
   (cl-loop
-   with reduced = init                  ; first is not a cons
-   with left = syntax-list
    for cur = (car left)
    for comb = (car cur)
    for atom = (cdr cur)
    while (and cur (not (eq comb :left-paren)))
    do (if (eq atom :right-paren)
-          (let* ((res (f3-parse-upto-left-paren-or-end
-                       (cl-second left) (nthcdr 2 left)))
-                 (new-reduced (car res))
-                 (new-left (cdr res)))
-            (setq reduced (f3-reduce-atom-and-cons reduced comb new-reduced)
-                  left new-left))
+          (let ((new-init (cl-second left))
+                (new-left (nthcdr 2 left)))
+            ;; if empty parens
+            (if (eq (car new-init) :left-paren)
+                (setq left new-left)
+              (let* ((res (f3-parse-upto-left-paren-or-end
+                           new-init new-left))
+                     (new-reduced (car res))
+                     (new-left (cdr res)))
+                (setq reduced (f3-reduce-atom-and-cons reduced comb new-reduced)
+                      left new-left))))
         (setq reduced (f3-reduce-atom-and-cons reduced comb atom)
               left (cdr left)))
    finally return (cons reduced left)))
@@ -279,6 +282,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3-make-process ()
   (let ((final-pat (f3-get-ast)))
+    (message "pat: %S" final-pat)
     (when final-pat
       (with-current-buffer f3-source-buffer
         ;; n.b.: `f3-async-filter-function' depends upon the "." literal
