@@ -16,7 +16,7 @@ Find files fast, using helm. It'll be cool, trust me.
 # Ideas
 ## use helm as a frontend
 - basic command just finds files in project based on name
-    - `find . \( -name "*a*" \) -and \( -name "*b*" \)` for `helm-pattern` = `a b`
+    - `find . -name "*a*" -and -name "*b*"` for `helm-pattern` = `a b`
 - bust out keybindings for set intersections and then running commands
 - these keybindings interpret the current pattern as an "and" pattern as shown above and then clear `helm-pattern` to eventually build a `find` command line
     - combinators: these set `f3-current-combinator`, take the current pattern as word, and reset helm
@@ -41,7 +41,7 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>TAB</kbd> = preview
     - meta
         - <kbd>M-u</kbd> = undo whatever was just done
-            - also usable to edit atoms earlier (further left) in the stack
+            - also usable to edit atoms earlier (further left) in the stack and then return right
         - <kbd>M-S-u</kbd> = redo
         - <kbd>M-<</kbd> = set `mindepth`
         - <kbd>M-></kbd> = set `maxdepth`

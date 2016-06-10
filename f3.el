@@ -419,6 +419,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
        (f3-do helm-pattern)))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
+;;; check out https://git-scm.com/docs/git-check-ignore, as well as just
+;;; implementing that in elisp and using it as part of the filter function
+;;; (regenerating this whenever the directory is changed)
 ;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
 ;;; dump to a REAL dired buffer
 ;;; TODO: add "use previous find command" command to use
@@ -547,10 +550,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
          ;; TODO: message here if undo/redo couldn't be performed?
          (message "lol oh man")
          (f3-do helm-pattern t))))))
-
-;;; TODO: consider renaming these to reflect the fact that they can keep a find
-;;; intact while being able to move back and forth between arguments to edit
-;;; them?
 
 (defun f3-do (&optional initial-input preserve-complement)
   (let* ((last-cand
