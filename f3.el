@@ -146,7 +146,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-shell-expansion-unless-wildcard (pat)
   (f3-wildcard-unless-meta pat f3-shell-wildcards f3-shell-wildcards "*"))
 
-;;; TODO: allow user to input find text functions
 (defun f3-create-text-pattern (pat)
   (let ((texts (helm-mm-split-pattern pat)))
     (cl-reduce
@@ -232,52 +231,45 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-buffer-persistent-action (buf)
   (switch-to-buffer buf))
 
-(defun f3-reduce-nonparen-ops (ops-list start)
-  (cl-reduce
-   (lambda (cur-pat atom)
-     ;; if the current list is nil, just use the atom, else combine
-     (let ((comb (car atom))
-           (chunk (cdr atom)))
-       (if cur-pat (append (list comb chunk)
-                           (list cur-pat))
-         chunk)))
-   ops-list
-   :initial-value start))
+(defun f3-reduce-atom-and-cons (an-atom comb new-atom)
+  (if an-atom (list comb new-atom an-atom) new-atom))
 
-(defun f3-get-ast-upto-paren (operator-stack &optional start)
+(defun f3-parse-upto-left-paren-or-end (init syntax-list)
   (cl-loop
-   for cur-stack = operator-stack then (cdr cur-stack)
-   for cur-atom = (car cur-stack)
-   for cur-op = (car cur-atom)
-   for cur-res = (cdr cur-atom)
-   with ret = nil
-   until (or (null cur-stack) (eq cur-op :left-paren))
-   do (if (eq cur-res :right-paren)
-          (let* ((res (f3-get-ast-upto-paren (cdr cur-stack)))
-                 (after-stack (car res))
-                 (result (cdr res)))
-            ;; this is correct whether after-stack is nil or :left-paren
-            (setq cur-stack after-stack)
-            (push ret (cons cur-res `(:paren ,ret))))
-        (push cur-atom ret))
-   finally return (cons cur-stack
-                        (f3-reduce-nonparen-ops (reverse ret) start))))
+   with reduced = init                  ; first is not a cons
+   with left = syntax-list
+   for cur = (car left)
+   for comb = (car cur)
+   for atom = (cdr cur)
+   while (and cur (not (eq comb :left-paren)))
+   do (if (eq atom :right-paren)
+          (let* ((res (f3-parse-upto-left-paren-or-end
+                       (cl-second left) (nthcdr 2 left)))
+                 (new-reduced (car res))
+                 (new-left (cdr res)))
+            (setq reduced (f3-reduce-atom-and-cons reduced comb new-reduced)
+                  left new-left))
+        (setq reduced (f3-reduce-atom-and-cons reduced comb atom)
+              left (cdr left)))
+   finally return (cons reduced left)))
 
-(defun f3-parse-full-stack (operator-stack start)
+(defun f3-swallow-left-parens (reduced remaining)
   (cl-loop
-   for cur-start = start then cur
-   with rest-stack = operator-stack
-   for (rest . cur) = (f3-get-ast-upto-paren operator-stack cur-start)
-   while rest
-   do (setq rest-stack (cdr rest))
-   finally return cur))
+   for res = (f3-parse-upto-left-paren-or-end reduced remaining)
+   for new-reduced = (car res)
+   for new-remaining = (cdr res)
+   while remaining
+   do (setq reduced new-reduced
+            ;; skip :left-paren
+            remaining (cdr new-remaining))
+   finally return reduced))
 
 (defun f3-get-ast ()
   (let ((current-pattern
          (unless (string-empty-p helm-pattern)
            (f3-pattern-to-parsed-arg helm-pattern))))
     (message "stack: %S, h-p: %s" f3-current-operator-stack helm-pattern)
-    (f3-parse-full-stack f3-current-operator-stack current-pattern)))
+    (f3-swallow-left-parens current-pattern f3-current-operator-stack)))
 
 (defun f3-filter-buffer-candidates (cand)
   (cl-case f3-current-mode
@@ -441,7 +433,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
      ;; insert WITHOUT a combinator since this is the FIRST of the current paren
      ;; stack (the initial value of the reduce)
      (let ((f3-current-operator-stack
-            (cons (list comb :right-paren)
+            (cons (cons comb :right-paren)
                   f3-current-operator-stack))
            (f3-match-buffers nil))
        (f3-do)))))
@@ -451,9 +443,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
          (if (buffer-live-p f3-last-selected-candidate)
              (buffer-name f3-last-selected-candidate)
            (setq f3-last-selected-candidate nil)))
-        (prompt (format "%s%s: "
-                        (if f3-current-complement "(not) " "")
-                        (substring (symbol-name f3-current-mode) 1))))
+        (prompt (concat
+                 (if f3-current-complement "(not) " "")
+                 (substring (symbol-name f3-current-mode) 1)
+                 ": ")))
     (helm :sources '(f3-find-process-source f3-buffer-source)
           :buffer f3-helm-buffer-name
           :input (or initial-input "")
