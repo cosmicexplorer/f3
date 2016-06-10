@@ -234,26 +234,34 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-reduce-atom-and-cons (an-atom comb new-atom)
   (if an-atom (list comb new-atom an-atom) new-atom))
 
+(defun f3-process-current-node (reduced atom comb left)
+  (if (eq atom :right-paren)
+      (let ((new-init (cl-second left))
+            (new-left (nthcdr 2 left)))
+        ;; if empty parens
+        (if (eq (car new-init) :left-paren)
+            ;; returns here
+            (cons reduced new-left)
+          (let* ((res (f3-parse-upto-left-paren-or-end
+                       new-init new-left))
+                 (new-reduced (car res))
+                 (new-left (cdr res)))
+            ;; returns here
+            (cons (f3-reduce-atom-and-cons reduced comb new-reduced)
+                  new-left))))
+    ;; returns here
+    (cons (f3-reduce-atom-and-cons reduced comb atom)
+          (cdr left))))
+
 (defun f3-parse-upto-left-paren-or-end (reduced left)
   (cl-loop
    for cur = (car left)
    for comb = (car cur)
    for atom = (cdr cur)
    while (and cur (not (eq comb :left-paren)))
-   do (if (eq atom :right-paren)
-          (let ((new-init (cl-second left))
-                (new-left (nthcdr 2 left)))
-            ;; if empty parens
-            (if (eq (car new-init) :left-paren)
-                (setq left new-left)
-              (let* ((res (f3-parse-upto-left-paren-or-end
-                           new-init new-left))
-                     (new-reduced (car res))
-                     (new-left (cdr res)))
-                (setq reduced (f3-reduce-atom-and-cons reduced comb new-reduced)
-                      left new-left))))
-        (setq reduced (f3-reduce-atom-and-cons reduced comb atom)
-              left (cdr left)))
+   do (let ((res (f3-process-current-node reduced atom comb left)))
+        (setq reduced (car res)
+              left (cdr res)))
    finally return (cons reduced left)))
 
 (defun f3-swallow-left-parens (reduced remaining)
@@ -433,12 +441,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (lambda ()
     (interactive)
     (f3-run-after-exit
-     ;; TODO: insert current pattern in there somewhere; should be able to
-     ;; insert WITHOUT a combinator since this is the FIRST of the current paren
-     ;; stack (the initial value of the reduce)
      (let ((f3-current-operator-stack
-            (cons (cons comb :right-paren)
-                  f3-current-operator-stack))
+            (append (list (cons comb :right-paren))
+                    (unless (string= helm-pattern "")
+                      (f3-pattern-to-parsed-arg helm-pattern))
+                    f3-current-operator-stack))
            (f3-match-buffers nil))
        (f3-do)))))
 
