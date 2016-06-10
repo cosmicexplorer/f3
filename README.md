@@ -31,6 +31,7 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-f</kbd> = "find" mode (just input raw find arguments)
         - <kbd>M-d</kbd> = filetype (`b|c|d|f|l|p|s`)
             - explode if not recognized
+        - <kbd>M-p</kbd> = perm
     - modifiers: these change `f3-current-complement` and do NOT reset helm
         - <kbd>M-q</kbd> = toggle complement (current)
     - actions
@@ -48,7 +49,7 @@ Find files fast, using helm. It'll be cool, trust me.
 
 add these to all helm searches
 
-- <kbd>M-p</kbd> = start search from project root
+- <kbd>M-o</kbd> = start search from project root
 - <kbd>M-i</kbd> = start search from initial choice of `default-directory`
 - <kbd>M-c</kbd> = choose directory to search from, starting at whatever the current choice is
 - <kbd>M-j</kbd> = start searching a directory up

@@ -48,7 +48,8 @@ returning a directory path."
   '((:text . f3-create-text-pattern)
     (:regex . f3-create-regex-pattern)
     (:raw . f3-create-raw-pattern)
-    (:filetype . f3-create-filetype-pattern))
+    (:filetype . f3-create-filetype-pattern)
+    (:perm . f3-create-perm-pattern))
   "Modes which interpret the current `helm-pattern' differently.")
 
 (defconst f3-valid-filetype-patterns '("b" "c" "d" "f" "l" "p" "s")
@@ -74,7 +75,6 @@ returning a directory path."
 ;; Global variables
 (defvar f3-current-mode)
 
-;;; TODO: add -perm!
 (defvar f3-current-complement)
 
 (defvar f3-current-command nil)
@@ -183,6 +183,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-create-filetype-pattern (pat)
   `(:filetype ,pat))
 
+(defun f3-create-perm-pattern (pat)
+  `(:perm ,pat))
+
 (defun f3-do-complement (ast do-complement)
   (if do-complement `(:not ,ast) ast))
 
@@ -220,6 +223,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
     (`(:raw ,thing) thing)
     (`(:filetype ,thing) `("-type" ,thing))
+    (`(:perm ,thing) `("-perm" ,thing))
     (_ (error (format "cannot comprehend arguments %S" parsed-args)))))
 
 (defun f3-get-buffer-names ()
@@ -470,7 +474,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defconst f3-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map helm-map)
-    (define-key map (kbd "M-p") (f3-choose-dir-and-rerun #'f3-use-project-dir))
+    (define-key map (kbd "M-o") (f3-choose-dir-and-rerun #'f3-use-project-dir))
     (define-key map (kbd "M-i") (f3-choose-dir-and-rerun #'f3-use-file-dir))
     (define-key map (kbd "M-c")
       (f3-choose-dir-and-rerun #'f3-explicitly-choose-dir))
@@ -479,6 +483,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-r") (f3-set-mode-and-rerun :regex))
     (define-key map (kbd "M-f") (f3-set-mode-and-rerun :raw))
     (define-key map (kbd "M-d") (f3-set-mode-and-rerun :filetype))
+    (define-key map (kbd "M-p") (f3-set-mode-and-rerun :perm))
     (define-key map (kbd "M-q") #'f3-toggle-complement)
     (define-key map (kbd "M-+") #'f3-attach-union)
     (define-key map (kbd "M-*") #'f3-attach-intersection)
