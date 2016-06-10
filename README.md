@@ -41,6 +41,7 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>TAB</kbd> = preview
     - meta
         - <kbd>M-u</kbd> = undo whatever was just done
+            - also usable to edit atoms earlier (further left) in the stack
         - <kbd>M-S-u</kbd> = redo
         - <kbd>M-<</kbd> = set `mindepth`
         - <kbd>M-></kbd> = set `maxdepth`

@@ -155,7 +155,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
      (lambda (parsed1 parsed2) `(:and ,parsed1 ,parsed2))
      (cl-mapcar
       (lambda (pat)
-        `(:text ,(f3-shell-expansion-unless-wildcard pat)))
+        `(:text ,pat))
       texts))))
 
 (defun f3-dot-star-unless-anchor (pat)
@@ -168,10 +168,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
      (cl-mapcar
       (lambda (pat)
         (cl-destructuring-bind (pred . reg) pat
-          (let ((real-reg (f3-dot-star-unless-anchor reg)))
-            (if (eq pred 'identity)
-                `(:regex ,real-reg)
-              `(:not (:regex ,real-reg))))))
+          (if (eq pred 'identity)
+              `(:regex ,real-reg)
+            `(:not (:regex ,real-reg)))))
       texts))))
 
 (defun f3-create-raw-pattern (pat)
@@ -210,6 +209,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
   (pcase parsed-args
+    ;; pass-through
+    (`(:atom . ,thing) (f3-parsed-to-command thing))
     ;; operators
     (`(:and . ,args)
      (cl-reduce (lambda (arg1 arg2)
@@ -222,8 +223,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (`(:not ,thing) `("-not" ,@(f3-parsed-to-command thing)))
     (`(:paren ,thing) `("(" ,@(f3-parsed-to-command thing) ")"))
     ;; modes
-    (`(:text ,thing) (f3-maybe-lowercase-generate "path" thing))
-    (`(:regex ,thing) (f3-maybe-lowercase-generate "regex" thing))
+    (`(:text ,thing) (f3-maybe-lowercase-generate
+                      "path" (f3-shell-expansion-unless-wildcard thing)))
+    (`(:regex ,thing) (f3-maybe-lowercase-generate
+                       "regex" (f3-dot-star-unless-anchor thing)))
     (`(:raw ,thing) thing)
     (`(:filetype ,thing) `("-type" ,thing))
     (`(:perm ,thing) `("-perm" ,thing))
@@ -252,7 +255,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (let* ((res (f3-parse-upto-left-paren-or-end
                        new-init new-left))
                  (new-reduced (car res))
-                 (new-left (cdr res)))
+                 (new-left (cddr res)))
             ;; returns here
             (cons (f3-reduce-atom-and-cons reduced comb new-reduced)
                   new-left))))
@@ -269,7 +272,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
    do (let ((res (f3-process-current-node reduced atom comb left)))
         (setq reduced (car res)
               left (cdr res)))
-   finally return (cons reduced left)))
+   finally return (let ((real-reduced
+                         (if (and reduced (eq comb :left-paren))
+                             `(:paren ,reduced)
+                           reduced)))
+                    (cons real-reduced left))))
 
 (defun f3-swallow-left-parens (reduced remaining)
   (cl-loop
@@ -424,45 +431,51 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-toggle-complement ()
   (interactive)
   (f3-run-after-exit
-   (let ((f3-current-complement (not f3-current-complement)))
-     (f3-do helm-pattern))))
+   (let ((f3-current-complement (not f3-current-complement))
+         (f3-match-buffers nil))
+     (f3-do helm-pattern t))))
 
 (defun f3-attach-union ()
   (interactive)
   (f3-run-after-exit
-   (let ((f3-current-operator-stack
+   (let* ((f3-current-operator-stack
           (cons (cons :or (f3-pattern-to-parsed-arg helm-pattern))
                 f3-current-operator-stack))
-         (f3-match-buffers nil))
+          (f3-current-redo-stack f3-current-operator-stack)
+          (f3-match-buffers nil))
      (f3-do))))
 
 (defun f3-attach-intersection ()
   (interactive)
   (f3-run-after-exit
-   (let ((f3-current-operator-stack
-          (cons (cons :and (f3-pattern-to-parsed-arg helm-pattern))
-                f3-current-operator-stack))
-         (f3-match-buffers nil))
+   (let* ((f3-current-operator-stack
+           (cons (cons :and (f3-pattern-to-parsed-arg helm-pattern))
+                 f3-current-operator-stack))
+          (f3-current-redo-stack f3-current-operator-stack)
+          (f3-match-buffers nil))
      (f3-do))))
 
 (defun f3-left-paren ()
   (interactive)
   (f3-run-after-exit
-   (let ((f3-current-operator-stack
-          (cons (list :left-paren) f3-current-operator-stack))
-         (f3-match-buffers nil))
+   (let* ((f3-current-operator-stack
+           (cons (list :left-paren) f3-current-operator-stack))
+          (f3-current-redo-stack f3-current-operator-stack)
+          (f3-match-buffers nil))
      (f3-do helm-pattern))))
 
 (defun f3-right-paren (comb)
   (lambda ()
     (interactive)
     (f3-run-after-exit
-     (let ((f3-current-operator-stack
-            (append (list (cons comb :right-paren))
-                    (unless (string= helm-pattern "")
-                      (f3-pattern-to-parsed-arg helm-pattern))
-                    f3-current-operator-stack))
-           (f3-match-buffers nil))
+     (let* ((f3-current-operator-stack
+             (append (list (cons comb :right-paren))
+                     (unless (string= helm-pattern "")
+                       (list
+                        (cons :atom (f3-pattern-to-parsed-arg helm-pattern))))
+                     f3-current-operator-stack))
+            (f3-current-redo-stack f3-current-operator-stack)
+            (f3-match-buffers nil))
        (f3-do)))))
 
 (defun f3-set-mindepth ()
@@ -481,15 +494,75 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3-match-buffers nil))
      (f3-do helm-pattern))))
 
-(defun f3-do (&optional initial-input)
-  (let ((last-cand
-         (if (buffer-live-p f3-last-selected-candidate)
-             (buffer-name f3-last-selected-candidate)
-           (setq f3-last-selected-candidate nil)))
-        (prompt (concat
-                 (if f3-current-complement "(not) " "")
-                 (substring (symbol-name f3-current-mode) 1)
-                 ": ")))
+(defun f3-find-left-atom ()
+  (message "stack: %S" f3-current-operator-stack)
+  (cl-loop
+   for head = f3-current-operator-stack then (cdr head)
+   for cur = (car head)
+   while (or (eq (car cur) :left-paren)
+             (eq (cdr cur) :right-paren))
+   finally return (or head
+                      (unless (memq (caar f3-current-operator-stack)
+                                    '(:left-paren :right-paren))
+                        f3-current-operator-stack))))
+
+(defun f3-find-right-atom-from (start)
+  (message "ops: %S, redo: %S" f3-current-operator-stack f3-current-redo-stack)
+  (cl-loop
+   for head = start then (cdr head)
+   for cur = (car head)
+   while (and (or (eq (car cur) :left-paren)
+                  (eq (cdr cur) :right-paren))
+              (not (eq f3-current-operator-stack head)))
+   finally return (if (eq f3-current-operator-stack (cdr head)) nil head)))
+
+(defun f3-find-right-atom ()
+  (cl-loop
+   for right-atom = (f3-find-right-atom-from f3-current-redo-stack)
+   then (f3-find-right-atom-from (cdr right-atom))
+   while right-atom
+   for prev-atom = right-atom
+   finally return prev-atom))
+
+(defun f3-search-then-restart (find-fun)
+  (lambda ()
+    (interactive)
+    (f3-run-after-exit
+     (let ((atom-link (funcall find-fun)))
+       (if atom-link
+           (let* ((atom (car atom-link))
+                  (pat-maybe-not (cdr atom))
+                  (f3-current-complement (eq (car pat-maybe-not) :not))
+                  (pat (if (eq (car pat-maybe-not) :not)
+                           (car (cdr pat-maybe-not))
+                         pat-maybe-not))
+                  (mode (cl-first pat))
+                  (real-pat (cl-second pat))
+                  (f3-current-mode mode)
+                  (f3-current-operator-stack (cdr atom-link)))
+             (message
+              "pat: %S, mode: %S, real-pat: %S, comp: %S, pat-maybe-not: %S"
+              pat mode real-pat f3-current-complement pat-maybe-not)
+             (f3-do real-pat t))
+         ;; TODO: message here if undo/redo couldn't be performed?
+         (message "lol oh man")
+         (f3-do helm-pattern t))))))
+
+;;; TODO: consider renaming these to reflect the fact that they can keep a find
+;;; intact while being able to move back and forth between arguments to edit
+;;; them?
+
+(defun f3-do (&optional initial-input preserve-complement)
+  (let* ((last-cand
+          (if (buffer-live-p f3-last-selected-candidate)
+              (buffer-name f3-last-selected-candidate)
+            (setq f3-last-selected-candidate nil)))
+         (f3-current-complement
+          (if preserve-complement f3-current-complement nil))
+         (prompt (concat
+                  (if f3-current-complement "(not) " "")
+                  (substring (symbol-name f3-current-mode) 1)
+                  ": ")))
     (helm :sources '(f3-find-process-source f3-buffer-source)
           :buffer f3-helm-buffer-name
           :input (or initial-input "")
@@ -520,6 +593,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-) M-*") (f3-right-paren :and))
     (define-key map (kbd "M-<") #'f3-set-mindepth)
     (define-key map (kbd "M->") #'f3-set-maxdepth)
+    (define-key map (kbd "M-u") (f3-search-then-restart #'f3-find-left-atom))
+    (define-key map (kbd "M-U") (f3-search-then-restart #'f3-find-right-atom))
     map)
   "Keymap for `f3'.")
 
