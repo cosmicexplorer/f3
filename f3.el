@@ -118,6 +118,9 @@ are killed at the end of a session.")
 (defvar f3-current-redo-stack nil
   "Current stream of parsed operators along with any hanging after undos.")
 
+(defvar f3-current-mindepth nil)
+(defvar f3-current-maxdepth nil)
+
 
 ;; Buffer-local variables
 (defvar-local f3-cached-dir nil)
@@ -292,13 +295,22 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (:regex (helm-mm-3-match cand helm-pattern))
     (t nil)))
 
+(defun f3-add-depths-to-args (args)
+  (when f3-current-maxdepth
+    (setq args `("-maxdepth" ,(number-to-string f3-current-maxdepth) ,@args)))
+  (when f3-current-mindepth
+    (setq args `("-mindepth" ,(number-to-string f3-current-mindepth) ,@args)))
+  args)
+
 (defun f3-make-process ()
   (let ((final-pat (f3-get-ast)))
     (message "pat: %S" final-pat)
     (when final-pat
       (with-current-buffer f3-source-buffer
         ;; n.b.: `f3-async-filter-function' depends upon the "." literal
-        (let* ((args `(,f3-find-program "." ,@(f3-parsed-to-command final-pat)))
+        (let* ((args-minus-depth (f3-parsed-to-command final-pat))
+               (args-with-depth (f3-add-depths-to-args args-minus-depth))
+               (args `(,f3-find-program "." ,@args-with-depth))
                (default-directory f3-cached-dir)
                (err-proc (make-pipe-process
                           :name f3-err-proc-name
@@ -453,6 +465,22 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
            (f3-match-buffers nil))
        (f3-do)))))
 
+(defun f3-set-mindepth ()
+  (interactive)
+  (f3-run-after-exit
+   (let* ((res (read-number "new mindepth: " (or f3-current-mindepth -1)))
+          (f3-current-mindepth (if (< res 0) nil res))
+          (f3-match-buffers nil))
+     (f3-do helm-pattern))))
+
+(defun f3-set-maxdepth ()
+  (interactive)
+  (f3-run-after-exit
+   (let* ((res (read-number "new maxdepth: " (or f3-current-maxdepth -1)))
+          (f3-current-maxdepth (if (< res 0) nil res))
+          (f3-match-buffers nil))
+     (f3-do helm-pattern))))
+
 (defun f3-do (&optional initial-input)
   (let ((last-cand
          (if (buffer-live-p f3-last-selected-candidate)
@@ -490,6 +518,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-(") #'f3-left-paren)
     (define-key map (kbd "M-) M-+") (f3-right-paren :or))
     (define-key map (kbd "M-) M-*") (f3-right-paren :and))
+    (define-key map (kbd "M-<") #'f3-set-mindepth)
+    (define-key map (kbd "M->") #'f3-set-maxdepth)
     map)
   "Keymap for `f3'.")
 
@@ -503,7 +533,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         (f3-current-complement nil)
         (f3-current-operator-stack nil)
         (f3-current-redo-stack nil)
-        (f3-match-buffers t))
+        (f3-match-buffers t)
+        (f3-current-mindepth nil)
+        (f3-current-maxdepth nil))
     (f3-do)))
 
 (provide 'f3)
