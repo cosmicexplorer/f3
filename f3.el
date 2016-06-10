@@ -289,6 +289,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
             remaining (cdr new-remaining))
    finally return reduced))
 
+;;; TODO: figure out how to take the entire redo stack and use it instead of
+;;; just the operator stack; this shows the entire command being executed if you
+;;; were to jump back right!
 (defun f3-get-ast ()
   (let ((current-pattern
          (unless (string-empty-p helm-pattern)
