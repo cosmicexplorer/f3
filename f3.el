@@ -119,6 +119,8 @@ are killed at the end of a session.")
 (defvar f3--current-mindepth nil)
 (defvar f3--current-maxdepth nil)
 
+(defvar f3--temp-pattern nil)
+
 
 ;; Buffer-local variables
 (defvar-local f3--cached-dir nil)
@@ -455,6 +457,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (cons (cons :or (f3--pattern-to-parsed-arg helm-pattern))
                 f3--current-operator-stack))
           (f3--current-redo-stack f3--current-operator-stack)
+          (f3--temp-pattern nil)
           (f3--match-buffers nil))
      (f3--do))))
 
@@ -465,6 +468,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
            (cons (cons :and (f3--pattern-to-parsed-arg helm-pattern))
                  f3--current-operator-stack))
           (f3--current-redo-stack f3--current-operator-stack)
+          (f3--temp-pattern nil)
           (f3--match-buffers nil))
      (f3--do))))
 
@@ -474,6 +478,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
    (let* ((f3--current-operator-stack
            (cons (list :left-paren) f3--current-operator-stack))
           (f3--current-redo-stack f3--current-operator-stack)
+          (f3--temp-pattern nil)
           (f3--match-buffers nil))
      (f3--do helm-pattern))))
 
@@ -487,6 +492,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                        (list
                         (list :atom (f3--pattern-to-parsed-arg helm-pattern))))
                      f3--current-operator-stack))
+            (f3--temp-pattern nil)
             (f3--current-redo-stack f3--current-operator-stack)
             (f3--match-buffers nil))
        (f3--do)))))
@@ -507,14 +513,13 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3--match-buffers nil))
      (f3--do helm-pattern))))
 
-(defun f3--find-previous-text-pattern ()
-  (cl-loop for head = f3--current-operator-stack then (cdr head)
+(defun f3--find-previous-text-pattern (start)
+  (cl-loop for head = start then (cdr head)
            for cur = (car head)
            do (message "head: %S, cur: %S" head cur)
-           for prev-head = head
            while head until (not (or (eq (car cur) :left-paren)
                                      (eq (cdr cur) :right-paren)))
-           finally return prev-head))
+           finally return head))
 
 (defun f3--set-current-pattern-from-link (link)
   (if (memq (car link) f3--combinators)
@@ -526,13 +531,67 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
       (t (let ((f3--current-mode (car link)))
            (f3--do (cl-second link)))))))
 
+(defun f3--do-undo ()
+  (let ((new-head (f3--find-previous-text-pattern f3--current-operator-stack)))
+    (message "new-head: %S" new-head)
+    (let ((f3--current-operator-stack (cdr new-head)))
+      (if new-head
+          (f3--set-current-pattern-from-link (car new-head))
+        ;; TODO: message or something if at beginning (if new-head is nil)?
+        (f3--do helm-pattern)))))
+
 (defun f3--undo ()
   (interactive)
   (f3--run-after-exit
-   (let ((new-head (f3--find-previous-text-pattern)))
-     (message "new-head: %S" new-head)
-     (setq f3--current-operator-stack (cdr new-head))
-     (when (car new-head) (f3--set-current-pattern-from-link (car new-head))))))
+   (if (eq f3--current-operator-stack f3--current-redo-stack)
+       (let ((f3--temp-pattern
+              (list (f3--pattern-to-parsed-arg helm-pattern)
+                    f3--current-operator-stack)))
+         (message "OH MAN: %S" f3--temp-pattern)
+         (f3--do-undo))
+     (f3--do-undo))))
+
+(defun f3--find-next-text-pattern (start)
+  (cl-loop with head = (f3--find-previous-text-pattern start)
+           with head2 = (f3--find-previous-text-pattern (cdr head))
+           with head3 = (f3--find-previous-text-pattern (cdr head2))
+           do (message
+               "start: %S, head: %S, head2: %S, head3: %S, stack: %S"
+               start head head2 head3 f3--current-operator-stack)
+           while (and head3
+                      (not (cl-find (car head3) f3--current-operator-stack)))
+           do (setq head head2
+                    head2 head3
+                    head3 (f3--find-previous-text-pattern (cdr head3)))
+           finally return head))
+
+(defun f3--get-twice-previous-text-pattern (start)
+  (f3--find-previous-text-pattern
+   (cdr (f3--find-previous-text-pattern start))))
+
+(defun f3--redo ()
+  (interactive)
+  (f3--run-after-exit
+   (let ((new-head (f3--find-next-text-pattern f3--current-redo-stack)))
+     (message "new-head: %S, redo-st: %S"
+              new-head f3--current-redo-stack)
+     (let* ((is-ready-for-temp-pattern
+             (and new-head
+                  (and f3--temp-pattern
+                       (eq f3--current-operator-stack
+                           (f3--get-twice-previous-text-pattern
+                            f3--current-redo-stack)))))
+            (f3--current-operator-stack (cdr new-head)))
+       (if new-head
+           (if is-ready-for-temp-pattern
+               (cl-destructuring-bind (pat f3--current-operator-stack)
+                   f3--temp-pattern
+                 (message
+                  "tmp-pat: %S, new-stack: %S" pat f3--current-operator-stack)
+                 (f3--set-current-pattern-from-link pat))
+             (f3--set-current-pattern-from-link (car new-head)))
+         ;; TODO: message or something if at beginning (if new-head is nil)?
+         (f3--do helm-pattern))))))
 
 ;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
 ;;; you want too (still within helm)
@@ -580,6 +639,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-<") #'f3--set-mindepth)
     (define-key map (kbd "M->") #'f3--set-maxdepth)
     (define-key map (kbd "M-u") #'f3--undo)
+    (define-key map (kbd "M-U") #'f3--redo)
     map)
   "Keymap for `f3'.")
 
@@ -595,7 +655,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         (f3--current-redo-stack nil)
         (f3--match-buffers t)
         (f3--current-mindepth nil)
-        (f3--current-maxdepth nil))
+        (f3--current-maxdepth nil)
+        (f3--temp-pattern nil))
     (f3--do)))
 
 (provide 'f3)
