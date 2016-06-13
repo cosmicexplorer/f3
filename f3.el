@@ -77,8 +77,6 @@ returning a directory path."
 
 (defvar f3--current-complement)
 
-(defvar f3--current-command nil)
-
 (defvar f3--match-buffers t
   "Whether to match buffers as well as async find results. Starts on, turned off
 within a session after a combinator is used.")
@@ -210,7 +208,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   "Transform PARSED-ARGS to a raw find command."
   (pcase parsed-args
     ;; pass-through
-    (`(:atom . ,thing) (f3--parsed-to-command thing))
+    (`(:atom ,thing) (f3--parsed-to-command thing))
     ;; operators
     (`(:and . ,args)
      (cl-reduce (lambda (arg1 arg2)
@@ -324,7 +322,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         ;; n.b.: `f3--async-filter-function' depends upon the "." literal
         (let* ((args-minus-depth (f3--parsed-to-command final-pat))
                (args-with-depth (f3--add-depths-to-args args-minus-depth))
-               (args `(,f--find-program "." ,@args-with-depth))
+               (args `(,f3-find-program "." ,@args-with-depth))
                (default-directory f3--cached-dir)
                (err-proc (make-pipe-process
                           :name f3--err-proc-name
@@ -487,7 +485,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
              (append (list (cons comb :right-paren))
                      (unless (string= helm-pattern "")
                        (list
-                        (cons :atom (f3--pattern-to-parsed-arg helm-pattern))))
+                        (list :atom (f3--pattern-to-parsed-arg helm-pattern))))
                      f3--current-operator-stack))
             (f3--current-redo-stack f3--current-operator-stack)
             (f3--match-buffers nil))
@@ -509,6 +507,32 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3--match-buffers nil))
      (f3--do helm-pattern))))
 
+(defun f3--find-previous-text-pattern ()
+  (cl-loop for head = f3--current-operator-stack then (cdr head)
+           for cur = (car head)
+           do (message "head: %S, cur: %S" head cur)
+           for prev-head = head
+           while head until (not (or (eq (car cur) :left-paren)
+                                     (eq (cdr cur) :right-paren)))
+           finally return prev-head))
+
+(defun f3--set-current-pattern-from-link (link)
+  (if (memq (car link) f3--combinators)
+      (f3--set-current-pattern-from-link (cdr link))
+    (cl-case (car link)
+      (:not (let ((f3-current-complement t))
+              (f3--set-current-pattern-from-link (cl-second link))))
+      (:atom (f3--set-current-pattern-from-link (cl-second link)))
+      (t (let ((f3--current-mode (car link)))
+           (f3--do (cl-second link)))))))
+
+(defun f3--undo ()
+  (interactive)
+  (f3--run-after-exit
+   (let ((new-head (f3--find-previous-text-pattern)))
+     (message "new-head: %S" new-head)
+     (setq f3--current-operator-stack (cdr new-head))
+     (when (car new-head) (f3--set-current-pattern-from-link (car new-head))))))
 
 ;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
 ;;; you want too (still within helm)
@@ -555,6 +579,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-) M-*") (f3--right-paren :and))
     (define-key map (kbd "M-<") #'f3--set-mindepth)
     (define-key map (kbd "M->") #'f3--set-maxdepth)
+    (define-key map (kbd "M-u") #'f3--undo)
     map)
   "Keymap for `f3'.")
 
