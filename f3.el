@@ -343,7 +343,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                  (with-current-buffer (process-buffer proc) (insert ev))
                (with-current-buffer (helm-buffer-get)
                  (erase-buffer)
-                 ;; TODO: remove results from the async source if this happens
+                 ;; TODO: remove results from the async source if this happens;
+                 ;; can potentially just remove async source from helm
+                 ;; temporarily?
                  (let ((err-msg (propertize "find failed with error:"
                                             'face f3-err-msg-props)))
                    (insert (format "%s\n%s" err-msg ev)))))))
@@ -504,59 +506,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3-match-buffers nil))
      (f3-do helm-pattern))))
 
-(defun f3-find-left-atom ()
-  (message "stack: %S" f3-current-operator-stack)
-  (cl-loop
-   for head = f3-current-operator-stack then (cdr head)
-   for cur = (car head)
-   while (or (eq (car cur) :left-paren)
-             (eq (cdr cur) :right-paren))
-   finally return (or head
-                      (unless (memq (caar f3-current-operator-stack)
-                                    '(:left-paren :right-paren))
-                        f3-current-operator-stack))))
-
-(defun f3-find-right-atom-from (start)
-  (message "ops: %S, redo: %S" f3-current-operator-stack f3-current-redo-stack)
-  (cl-loop
-   for head = start then (cdr head)
-   for cur = (car head)
-   while (and (or (eq (car cur) :left-paren)
-                  (eq (cdr cur) :right-paren))
-              (not (eq f3-current-operator-stack head)))
-   finally return (if (eq f3-current-operator-stack (cdr head)) nil head)))
-
-(defun f3-find-right-atom ()
-  (cl-loop
-   for right-atom = (f3-find-right-atom-from f3-current-redo-stack)
-   then (f3-find-right-atom-from (cdr right-atom))
-   while right-atom
-   for prev-atom = right-atom
-   finally return prev-atom))
-
-(defun f3-search-then-restart (find-fun)
-  (lambda ()
-    (interactive)
-    (f3-run-after-exit
-     (let ((atom-link (funcall find-fun)))
-       (if atom-link
-           (let* ((atom (car atom-link))
-                  (pat-maybe-not (cdr atom))
-                  (f3-current-complement (eq (car pat-maybe-not) :not))
-                  (pat (if (eq (car pat-maybe-not) :not)
-                           (car (cdr pat-maybe-not))
-                         pat-maybe-not))
-                  (mode (cl-first pat))
-                  (real-pat (cl-second pat))
-                  (f3-current-mode mode)
-                  (f3-current-operator-stack (cdr atom-link)))
-             (message
-              "pat: %S, mode: %S, real-pat: %S, comp: %S, pat-maybe-not: %S"
-              pat mode real-pat f3-current-complement pat-maybe-not)
-             (f3-do real-pat t))
-         ;; TODO: message here if undo/redo couldn't be performed?
-         (message "lol oh man")
-         (f3-do helm-pattern t))))))
+;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
+;;; you want too (still within helm)
 
 (defun f3-do (&optional initial-input preserve-complement)
   (let* ((last-cand
@@ -599,8 +550,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-) M-*") (f3-right-paren :and))
     (define-key map (kbd "M-<") #'f3-set-mindepth)
     (define-key map (kbd "M->") #'f3-set-maxdepth)
-    (define-key map (kbd "M-u") (f3-search-then-restart #'f3-find-left-atom))
-    (define-key map (kbd "M-U") (f3-search-then-restart #'f3-find-right-atom))
     map)
   "Keymap for `f3'.")
 
