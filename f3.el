@@ -24,8 +24,6 @@
 ;;; function or lambda (accepting either each file individually or the entire
 ;;; list) and attach itself to a process filter or sentinel to get nonblocking
 ;;; results that fill in as you type
-;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
-;;; you want too (still within helm)
 ;;; TODO: show state of undo/redo in some usable way
 
 
@@ -328,14 +326,18 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (setq args `("-mindepth" ,(number-to-string f3--current-mindepth) ,@args)))
   args)
 
-(defun f3--make-process ()
+(defun f3--get-find-args ()
   (let ((final-pat (f3--get-ast)))
     (when final-pat
+      (let ((args-minus-depth (f3--parsed-to-command final-pat)))
+        (f3--add-depths-to-args args-minus-depth)))))
+
+(defun f3--make-process ()
+  (let ((args (f3--get-find-args)))
+    (when args
       (with-current-buffer f3--source-buffer
         ;; n.b.: `f3--async-filter-function' depends upon the "." literal
-        (let* ((args-minus-depth (f3--parsed-to-command final-pat))
-               (args-with-depth (f3--add-depths-to-args args-minus-depth))
-               (args `(,f3-find-program "." ,@args-with-depth))
+        (let* ((all-args `(,f3-find-program "." ,@args))
                (default-directory f3--cached-dir)
                (err-proc (make-pipe-process
                           :name f3--err-proc-name
@@ -345,7 +347,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                 (make-process
                  :name f3--proc-name
                  :buffer f3--buf-name
-                 :command args
+                 :command all-args
                  :stderr err-proc
                  :sentinel (lambda (proc ev)
                              (run-with-timer
@@ -367,7 +369,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                  (when (process-live-p real-proc) (kill-process real-proc))))))
           (helm-attrset
            'name
-           (format "%s: %s" f3--cached-dir (mapconcat #'identity args " "))
+           (format "%s: %s" f3--cached-dir (mapconcat #'identity all-args " "))
            f3--find-process-source)
           real-proc)))))
 
@@ -611,13 +613,25 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
              (f3--set-current-pattern-from-link (car new-head))))
        (f3--do helm-pattern t)))))
 
-(defun f3--get-number-redos (start)
-  (cl-loop with head = (f3--find-previous-text-pattern start)
-           with num = 0
-           while (and head
-                      (not (cl-find (car head) f3--current-operator-stack)))
-           do (incf num)
-           finally return num))
+(defmacro f3--clear-session-variables (&rest body)
+  `(let ((f3--source-buffer (current-buffer))
+         (f3--current-mode f3-default-mode)
+         (f3--current-complement nil)
+         (f3--current-operator-stack nil)
+         (f3--current-redo-stack nil)
+         (f3--match-buffers t)
+         (f3--current-mindepth nil)
+         (f3--current-maxdepth nil)
+         (f3--temp-pattern nil))
+     ,@body))
+
+(defun f3--bounce-to-raw ()
+  (interactive)
+  (let ((raw-cmd (mapconcat #'identity (f3--get-find-args) " ")))
+    (f3--clear-session-variables
+     (f3--run-after-exit
+      (let ((f3--current-mode :raw))
+        (f3--do raw-cmd))))))
 
 (defun f3--do (&optional initial-input preserve-complement)
   (let* ((last-cand
@@ -663,6 +677,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M->") #'f3--set-maxdepth)
     (define-key map (kbd "M-u") #'f3--undo)
     (define-key map (kbd "M-U") #'f3--redo)
+    (define-key map (kbd "M-b") #'f3--bounce-to-raw)
     map)
   "Keymap for `f3'.")
 
@@ -671,16 +686,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 ;;;###autoload
 (defun f3 (start-dir)
   (interactive (list (f3--choose-dir)))
-  (let ((f3--source-buffer (current-buffer))
-        (f3--current-mode f3-default-mode)
-        (f3--current-complement nil)
-        (f3--current-operator-stack nil)
-        (f3--current-redo-stack nil)
-        (f3--match-buffers t)
-        (f3--current-mindepth nil)
-        (f3--current-maxdepth nil)
-        (f3--temp-pattern nil))
-    (f3--do)))
+  (f3--clear-session-variables (f3--do)))
 
 (provide 'f3)
 ;;; f3.el ends here

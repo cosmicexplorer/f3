@@ -39,6 +39,7 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-l</kbd> = exit helm and list the files in a REAL dired buffer
         - <kbd>RET</kbd> = visit
         - <kbd>TAB</kbd> = preview
+        - <kbd>M-b</kbd> = bounce to raw
     - meta
         - <kbd>M-u</kbd> = undo whatever was just done
             - also usable to edit atoms earlier (further left) in the stack and then return right
