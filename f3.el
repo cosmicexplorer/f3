@@ -459,8 +459,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3--current-redo-stack f3--current-operator-stack)
           (f3--temp-pattern nil)
           (f3--match-buffers nil))
-     (message "oper-st: %S, redo-stt: %S"
-              f3--current-operator-stack f3--current-redo-stack)
      (f3--do))))
 
 (defun f3--attach-intersection ()
@@ -584,8 +582,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--redo ()
   (interactive)
-  (message "op-st: %S, redo-st: %S"
-           f3--current-operator-stack f3--current-redo-stack)
   (f3--run-after-exit
    (let* ((new-head
            (and (not (eq f3--current-operator-stack
@@ -600,8 +596,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (do-edit-stack-entry (not (null f3--current-operator-stack)))
           (f3--current-operator-stack
            (if new-head (cdr new-head) f3--current-operator-stack)))
-     (message "new-head: %S, op-st: %S, redo-st: %S"
-              new-head f3--current-operator-stack f3--current-redo-stack)
      (if new-head
          (progn
            (when do-edit-stack-entry (f3--edit-current-stack-entry))
@@ -613,8 +607,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
        (f3--do helm-pattern t)))))
 
 (defmacro f3--clear-session-variables (&rest body)
-  `(let ((f3--source-buffer (current-buffer))
-         (f3--current-mode f3-default-mode)
+  `(let ((f3--current-mode f3-default-mode)
          (f3--current-complement nil)
          (f3--current-operator-stack nil)
          (f3--current-redo-stack nil)
@@ -695,7 +688,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 ;;;###autoload
 (defun f3 (start-dir)
   (interactive (list (f3--choose-dir)))
-  (f3--clear-session-variables (f3--do)))
+  (let ((f3--source-buffer (current-buffer)))
+    (f3--clear-session-variables (f3--do))))
 
 (provide 'f3)
 ;;; f3.el ends here
