@@ -425,14 +425,14 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (with-current-buffer f3--source-buffer
       (f3--run-after-exit
        (let ((f3--cached-dir (funcall dir-fun f3--cached-dir)))
-         (f3--do helm-pattern))))))
+         (f3--do helm-pattern t))))))
 
 (defun f3--set-mode-and-rerun (mode)
   (lambda ()
     (interactive)
     (f3--run-after-exit
      (let ((f3--current-mode mode))
-       (f3--do helm-pattern)))))
+       (f3--do helm-pattern t)))))
 
 ;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
 ;;; check out https://git-scm.com/docs/git-check-ignore, as well as just
@@ -484,7 +484,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3--current-redo-stack f3--current-operator-stack)
           (f3--temp-pattern nil)
           (f3--match-buffers nil))
-     (f3--do helm-pattern))))
+     (f3--do helm-pattern t))))
 
 (defun f3--right-paren (comb)
   (lambda ()
@@ -507,7 +507,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
    (let* ((res (read-number "new mindepth: " (or f3--current-mindepth -1)))
           (f3--current-mindepth (if (< res 0) nil res))
           (f3--match-buffers nil))
-     (f3--do helm-pattern))))
+     (f3--do helm-pattern t))))
 
 (defun f3--set-maxdepth ()
   (interactive)
@@ -515,7 +515,26 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
    (let* ((res (read-number "new maxdepth: " (or f3--current-maxdepth -1)))
           (f3--current-maxdepth (if (< res 0) nil res))
           (f3--match-buffers nil))
-     (f3--do helm-pattern))))
+     (f3--do helm-pattern t))))
+
+(defun f3--find-next-stack-entry (start)
+  (cl-loop with head = (f3--find-previous-text-pattern start)
+           with head2 = (f3--find-previous-text-pattern (cdr head))
+           while (and head2
+                      (not (cl-find (car head2) f3--current-operator-stack)))
+           do (setq head head2
+                    head2 (f3--find-previous-text-pattern (cdr head2)))
+           finally return head))
+
+(defun f3--edit-current-stack-entry ()
+  (let ((new-stack (f3--find-next-stack-entry f3--current-redo-stack)))
+    (message "new-stack: %S, op-stack: %S"
+             new-stack f3--current-operator-stack)
+    (setf (car new-stack)
+          (if (memq (caar new-stack) f3--combinators)
+              (cons (caar new-stack) (f3--pattern-to-parsed-arg helm-pattern))
+            (list (caar new-stack)
+                  (f3--pattern-to-parsed-arg helm-pattern))))))
 
 (defun f3--find-previous-text-pattern (start)
   (cl-loop for head = start then (cdr head)
@@ -525,15 +544,16 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                                      (eq (cdr cur) :right-paren)))
            finally return head))
 
-(defun f3--set-current-pattern-from-link (link)
-  (if (memq (car link) f3--combinators)
-      (f3--set-current-pattern-from-link (cdr link))
-    (cl-case (car link)
-      (:not (let ((f3--current-complement t))
-              (f3--set-current-pattern-from-link (cl-second link))))
-      (:atom (f3--set-current-pattern-from-link (cl-second link)))
-      (t (let ((f3--current-mode (car link)))
-           (f3--do (cl-second link) t))))))
+(defun f3--set-current-pattern-from-link (link &optional comp)
+  (message "link: %S" link)
+  (let ((f3--current-complement comp))
+    (if (memq (car link) f3--combinators)
+        (f3--set-current-pattern-from-link (cdr link))
+      (cl-case (car link)
+        (:not (f3--set-current-pattern-from-link (cl-second link) t))
+        (:atom (f3--set-current-pattern-from-link (cl-second link) comp))
+        (t (let ((f3--current-mode (car link)))
+             (f3--do (cl-second link) t)))))))
 
 (defun f3--do-undo ()
   (let ((new-head (f3--find-previous-text-pattern f3--current-operator-stack)))
@@ -542,7 +562,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
       (if new-head
           (f3--set-current-pattern-from-link (car new-head))
         ;; TODO: message or something if at beginning (if new-head is nil)?
-        (f3--do helm-pattern)))))
+        (f3--do helm-pattern t)))))
 
 (defun f3--undo ()
   (interactive)
@@ -553,6 +573,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                     f3--current-operator-stack)))
          (message "OH MAN: %S" f3--temp-pattern)
          (f3--do-undo))
+     (f3--edit-current-stack-entry)
      (f3--do-undo))))
 
 (defun f3--find-next-text-pattern (start)
@@ -577,25 +598,29 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (interactive)
   (f3--run-after-exit
    (let ((new-head (f3--find-next-text-pattern f3--current-redo-stack)))
-     (message "new-head: %S, redo-st: %S"
-              new-head f3--current-redo-stack)
+     (message "new-head: %S, redo-st: %S, cur-st: %S"
+              new-head f3--current-redo-stack f3--current-operator-stack)
      (let* ((is-ready-for-temp-pattern
              (and new-head
                   (and f3--temp-pattern
                        (eq f3--current-operator-stack
                            (f3--get-twice-previous-text-pattern
                             f3--current-redo-stack)))))
+            (do-edit-stack-entry (not (null f3--current-operator-stack)))
             (f3--current-operator-stack (cdr new-head)))
        (if new-head
-           (if is-ready-for-temp-pattern
-               (cl-destructuring-bind (pat f3--current-operator-stack)
-                   f3--temp-pattern
-                 (message
-                  "tmp-pat: %S, new-stack: %S" pat f3--current-operator-stack)
-                 (f3--set-current-pattern-from-link pat))
-             (f3--set-current-pattern-from-link (car new-head)))
+           (progn
+             (when do-edit-stack-entry
+               (f3--edit-current-stack-entry))
+             (if is-ready-for-temp-pattern
+                 (cl-destructuring-bind (pat f3--current-operator-stack)
+                     f3--temp-pattern
+                   (message
+                    "tmp-pat: %S, new-stack: %S" pat f3--current-operator-stack)
+                   (f3--set-current-pattern-from-link pat))
+               (f3--set-current-pattern-from-link (car new-head))))
          ;; TODO: message or something if at beginning (if new-head is nil)?
-         (f3--do helm-pattern))))))
+         (f3--do helm-pattern t))))))
 
 ;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
 ;;; you want too (still within helm)
