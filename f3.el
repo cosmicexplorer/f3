@@ -244,17 +244,21 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3-reduce-atom-and-cons (an-atom comb new-atom)
   (if an-atom (list comb new-atom an-atom) new-atom))
 
+(defun f3-maybe-add-paren (reduced)
+  (if (eq (car reduced) :paren) reduced
+    `(:paren ,reduced)))
+
 (defun f3-process-current-node (reduced atom comb left)
   (if (eq atom :right-paren)
       (let ((new-init (cl-second left))
-            (new-left (nthcdr 2 left)))
+            (new-left (cddr left)))
         ;; if empty parens
         (if (eq (car new-init) :left-paren)
             ;; returns here
             (cons reduced new-left)
           (let* ((res (f3-parse-upto-left-paren-or-end
                        new-init new-left))
-                 (new-reduced (car res))
+                 (new-reduced (f3-maybe-add-paren (car res)))
                  (new-left (cddr res)))
             ;; returns here
             (cons (f3-reduce-atom-and-cons reduced comb new-reduced)
