@@ -335,7 +335,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                  :name f3--proc-name
                  :buffer f3--buf-name
                  :command args
-                 :stderr err-proc)))
+                 :stderr err-proc
+                 :sentinel (lambda (proc ev)
+                             (when (and (not (process-live-p proc))
+                                        (process-live-p err-proc))
+                               (kill-process err-proc))))))
           (set-process-filter
            err-proc
            (lambda (proc ev)
