@@ -16,8 +16,6 @@
 ;;; check out https://git-scm.com/docs/git-check-ignore, as well as just
 ;;; implementing that in elisp and using it as part of the filter function
 ;;; (regenerating this whenever the directory is changed)
-;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
-;;; dump to a REAL dired buffer
 ;;; TODO: add "use previous find command" command to use
 ;;; run-{lisp,shell}{,-interactively} or to just list files
 ;;; TODO: run-lisp-interactively could read in an expression which resolves to a
@@ -33,6 +31,7 @@
 (require 'helm)
 (require 'helm-multi-match)
 (require 'subr-x)
+(require 'find-dired)
 
 
 ;; Customization
@@ -633,6 +632,15 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
       (let ((f3--current-mode :raw))
         (f3--do raw-cmd))))))
 
+(defun f3--surround-with-quotes (str) (format "\"%s\"" str))
+
+(defun f3--dump-to-dired ()
+  (interactive)
+  (let ((raw-cmd (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " "))
+        (dir default-directory))
+    (f3--run-after-exit
+     (find-dired dir raw-cmd))))
+
 (defun f3--do (&optional initial-input preserve-complement)
   (let* ((last-cand
           (if (buffer-live-p f3--last-selected-candidate)
@@ -678,6 +686,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-u") #'f3--undo)
     (define-key map (kbd "M-U") #'f3--redo)
     (define-key map (kbd "M-b") #'f3--bounce-to-raw)
+    (define-key map (kbd "M-l") #'f3--dump-to-dired)
     map)
   "Keymap for `f3'.")
 
