@@ -26,6 +26,7 @@
 ;;; results that fill in as you type
 ;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
 ;;; you want too (still within helm)
+;;; TODO: show state of undo/redo in some usable way
 
 
 ;;; Code:
@@ -347,9 +348,12 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                  :command args
                  :stderr err-proc
                  :sentinel (lambda (proc ev)
-                             (when (and (not (process-live-p proc))
-                                        (process-live-p err-proc))
-                               (kill-process err-proc))))))
+                             (run-with-timer
+                              0 nil
+                              (lambda ()
+                                (when (and (not (process-live-p proc))
+                                           (process-live-p err-proc))
+                                  (kill-process err-proc))))))))
           (set-process-filter
            err-proc
            (lambda (proc ev)
@@ -454,6 +458,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3--current-redo-stack f3--current-operator-stack)
           (f3--temp-pattern nil)
           (f3--match-buffers nil))
+     (message "oper-st: %S, redo-stt: %S"
+              f3--current-operator-stack f3--current-redo-stack)
      (f3--do))))
 
 (defun f3--attach-intersection ()
@@ -547,7 +553,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (let ((f3--current-operator-stack (cdr new-head)))
       (if new-head
           (f3--set-current-pattern-from-link (car new-head))
-        ;; TODO: message or something if at beginning (if new-head is nil)?
         (f3--do helm-pattern t)))))
 
 (defun f3--undo ()
@@ -578,27 +583,41 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--redo ()
   (interactive)
+  (message "op-st: %S, redo-st: %S"
+           f3--current-operator-stack f3--current-redo-stack)
   (f3--run-after-exit
-   (let ((new-head (f3--find-next-text-pattern f3--current-redo-stack)))
-     (let* ((is-ready-for-temp-pattern
-             (and new-head
-                  (and f3--temp-pattern
-                       (eq f3--current-operator-stack
-                           (f3--get-twice-previous-text-pattern
-                            f3--current-redo-stack)))))
-            (do-edit-stack-entry (not (null f3--current-operator-stack)))
-            (f3--current-operator-stack (cdr new-head)))
-       (if new-head
-           (progn
-             (when do-edit-stack-entry
-               (f3--edit-current-stack-entry))
-             (if is-ready-for-temp-pattern
-                 (cl-destructuring-bind (pat f3--current-operator-stack)
-                     f3--temp-pattern
-                   (f3--set-current-pattern-from-link pat))
-               (f3--set-current-pattern-from-link (car new-head))))
-         ;; TODO: message or something if at beginning (if new-head is nil)?
-         (f3--do helm-pattern t))))))
+   (let* ((new-head
+           (and (not (eq f3--current-operator-stack
+                         f3--current-redo-stack))
+                (f3--find-next-text-pattern f3--current-redo-stack)))
+          (is-ready-for-temp-pattern
+           (and new-head
+                (and f3--temp-pattern
+                     (eq f3--current-operator-stack
+                         (f3--get-twice-previous-text-pattern
+                          f3--current-redo-stack)))))
+          (do-edit-stack-entry (not (null f3--current-operator-stack)))
+          (f3--current-operator-stack
+           (if new-head (cdr new-head) f3--current-operator-stack)))
+     (message "new-head: %S, op-st: %S, redo-st: %S"
+              new-head f3--current-operator-stack f3--current-redo-stack)
+     (if new-head
+         (progn
+           (when do-edit-stack-entry (f3--edit-current-stack-entry))
+           (if is-ready-for-temp-pattern
+               (cl-destructuring-bind (pat f3--current-operator-stack)
+                   f3--temp-pattern
+                 (f3--set-current-pattern-from-link pat))
+             (f3--set-current-pattern-from-link (car new-head))))
+       (f3--do helm-pattern t)))))
+
+(defun f3--get-number-redos (start)
+  (cl-loop with head = (f3--find-previous-text-pattern start)
+           with num = 0
+           while (and head
+                      (not (cl-find (car head) f3--current-operator-stack)))
+           do (incf num)
+           finally return num))
 
 (defun f3--do (&optional initial-input preserve-complement)
   (let* ((last-cand
