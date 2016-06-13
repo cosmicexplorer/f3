@@ -27,16 +27,17 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-)</kbd> = close paren
     - modes: these do NOT reset helm, just change `f3-current-mode`
         - <kbd>M-t</kbd> = normal text mode (not regex mode)
-        - <kbd>M-r</kbd> = regex mode
-        - <kbd>M-f</kbd> = "find" mode (just input raw find arguments)
-        - <kbd>M-d</kbd> = filetype (`b|c|d|f|l|p|s`)
+        - <kbd>M-x</kbd> = regex mode
+        - <kbd>M-r</kbd> = "find" mode (just input raw find arguments)
+        - <kbd>M-f</kbd> = filetype (`b|c|d|f|l|p|s`)
             - explode if not recognized
         - <kbd>M-p</kbd> = perm
     - modifiers: these change `f3-current-complement` and do NOT reset helm
         - <kbd>M-q</kbd> = toggle complement (current)
     - actions
         - <kbd>M-g</kbd> = run command on results in new `*Async Shell Command*` buffer and close helm
-        - <kbd>M-l</kbd> = exit helm and list the files in a REAL dired buffer
+        - <kbd>M-d</kbd> = exit helm and list the files in a `find-dired` buffer
+        - <kbd>M-l</kbd> = run lisp on results
         - <kbd>RET</kbd> = visit
         - <kbd>TAB</kbd> = preview
         - <kbd>M-b</kbd> = bounce to raw
