@@ -529,11 +529,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (if (memq (car link) f3--combinators)
       (f3--set-current-pattern-from-link (cdr link))
     (cl-case (car link)
-      (:not (let ((f3-current-complement t))
+      (:not (let ((f3--current-complement t))
               (f3--set-current-pattern-from-link (cl-second link))))
       (:atom (f3--set-current-pattern-from-link (cl-second link)))
       (t (let ((f3--current-mode (car link)))
-           (f3--do (cl-second link)))))))
+           (f3--do (cl-second link) t))))))
 
 (defun f3--do-undo ()
   (let ((new-head (f3--find-previous-text-pattern f3--current-operator-stack)))
