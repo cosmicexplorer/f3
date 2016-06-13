@@ -12,6 +12,21 @@
 ;; 1. Finding a file in a project really fast.
 ;; 2. Finding some complex set of files and performing some action on them.
 
+;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
+;;; check out https://git-scm.com/docs/git-check-ignore, as well as just
+;;; implementing that in elisp and using it as part of the filter function
+;;; (regenerating this whenever the directory is changed)
+;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
+;;; dump to a REAL dired buffer
+;;; TODO: add "use previous find command" command to use
+;;; run-{lisp,shell}{,-interactively} or to just list files
+;;; TODO: run-lisp-interactively could read in an expression which resolves to a
+;;; function or lambda (accepting either each file individually or the entire
+;;; list) and attach itself to a process filter or sentinel to get nonblocking
+;;; results that fill in as you type
+;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
+;;; you want too (still within helm)
+
 
 ;;; Code:
 
@@ -293,14 +308,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
             remaining (cdr new-remaining))
    finally return reduced))
 
-;;; TODO: figure out how to take the entire redo stack and use it instead of
-;;; just the operator stack; this shows the entire command being executed if you
-;;; were to jump back right!
 (defun f3--get-ast ()
   (let ((current-pattern
          (unless (string-empty-p helm-pattern)
            (f3--pattern-to-parsed-arg helm-pattern))))
-    (message "stack: %S, h-p: %s" f3--current-operator-stack helm-pattern)
     (f3--swallow-left-parens current-pattern f3--current-operator-stack)))
 
 (defun f3--filter-buffer-candidates (cand)
@@ -318,7 +329,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--make-process ()
   (let ((final-pat (f3--get-ast)))
-    (message "pat: %S" final-pat)
     (when final-pat
       (with-current-buffer f3--source-buffer
         ;; n.b.: `f3--async-filter-function' depends upon the "." literal
@@ -347,20 +357,14 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                  (with-current-buffer (process-buffer proc) (insert ev))
                (with-current-buffer (helm-buffer-get)
                  (erase-buffer)
-                 ;; TODO: remove results from the async source if this happens;
-                 ;; can potentially just remove async source from helm
-                 ;; temporarily?
                  (let ((err-msg (propertize "find failed with error:"
                                             'face f3--err-msg-props)))
-                   (insert (format "%s\n%s" err-msg ev)))))))
+                   (insert (format "%s\n%s" err-msg ev)))
+                 (when (process-live-p real-proc) (kill-process real-proc))))))
           (helm-attrset
            'name
            (format "%s: %s" f3--cached-dir (mapconcat #'identity args " "))
            f3--find-process-source)
-          (message
-           "default-directory: %s, args: %S, mode: %S, ast: %S, stack: %S"
-           default-directory args f3--current-mode final-pat
-           f3--current-operator-stack)
           real-proc)))))
 
 (defun f3--clear-opened-persistent-buffers ()
@@ -433,19 +437,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (f3--run-after-exit
      (let ((f3--current-mode mode))
        (f3--do helm-pattern t)))))
-
-;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
-;;; check out https://git-scm.com/docs/git-check-ignore, as well as just
-;;; implementing that in elisp and using it as part of the filter function
-;;; (regenerating this whenever the directory is changed)
-;;; TODO: along with run-shell-command/run-lisp on results, also allow user to
-;;; dump to a REAL dired buffer
-;;; TODO: add "use previous find command" command to use
-;;; run-{lisp,shell}{,-interactively} or to just list files
-;;; TODO: run-lisp-interactively could read in an expression which resolves to a
-;;; function or lambda (accepting either each file individually or the entire
-;;; list) and attach itself to a process filter or sentinel to get nonblocking
-;;; results that fill in as you type
 
 (defun f3--toggle-complement ()
   (interactive)
@@ -528,8 +519,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--edit-current-stack-entry ()
   (let ((new-stack (f3--find-next-stack-entry f3--current-redo-stack)))
-    (message "new-stack: %S, op-stack: %S"
-             new-stack f3--current-operator-stack)
     (setf (car new-stack)
           (if (memq (caar new-stack) f3--combinators)
               (cons (caar new-stack) (f3--pattern-to-parsed-arg helm-pattern))
@@ -539,13 +528,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--find-previous-text-pattern (start)
   (cl-loop for head = start then (cdr head)
            for cur = (car head)
-           do (message "head: %S, cur: %S" head cur)
            while head until (not (or (eq (car cur) :left-paren)
                                      (eq (cdr cur) :right-paren)))
            finally return head))
 
 (defun f3--set-current-pattern-from-link (link &optional comp)
-  (message "link: %S" link)
   (let ((f3--current-complement comp))
     (if (memq (car link) f3--combinators)
         (f3--set-current-pattern-from-link (cdr link))
@@ -557,7 +544,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--do-undo ()
   (let ((new-head (f3--find-previous-text-pattern f3--current-operator-stack)))
-    (message "new-head: %S" new-head)
     (let ((f3--current-operator-stack (cdr new-head)))
       (if new-head
           (f3--set-current-pattern-from-link (car new-head))
@@ -571,7 +557,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
        (let ((f3--temp-pattern
               (list (f3--pattern-to-parsed-arg helm-pattern)
                     f3--current-operator-stack)))
-         (message "OH MAN: %S" f3--temp-pattern)
          (f3--do-undo))
      (f3--edit-current-stack-entry)
      (f3--do-undo))))
@@ -580,9 +565,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (cl-loop with head = (f3--find-previous-text-pattern start)
            with head2 = (f3--find-previous-text-pattern (cdr head))
            with head3 = (f3--find-previous-text-pattern (cdr head2))
-           do (message
-               "start: %S, head: %S, head2: %S, head3: %S, stack: %S"
-               start head head2 head3 f3--current-operator-stack)
            while (and head3
                       (not (cl-find (car head3) f3--current-operator-stack)))
            do (setq head head2
@@ -598,8 +580,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (interactive)
   (f3--run-after-exit
    (let ((new-head (f3--find-next-text-pattern f3--current-redo-stack)))
-     (message "new-head: %S, redo-st: %S, cur-st: %S"
-              new-head f3--current-redo-stack f3--current-operator-stack)
      (let* ((is-ready-for-temp-pattern
              (and new-head
                   (and f3--temp-pattern
@@ -615,15 +595,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
              (if is-ready-for-temp-pattern
                  (cl-destructuring-bind (pat f3--current-operator-stack)
                      f3--temp-pattern
-                   (message
-                    "tmp-pat: %S, new-stack: %S" pat f3--current-operator-stack)
                    (f3--set-current-pattern-from-link pat))
                (f3--set-current-pattern-from-link (car new-head))))
          ;; TODO: message or something if at beginning (if new-head is nil)?
          (f3--do helm-pattern t))))))
-
-;;; TODO: add "bounce to raw" mode so you can just edit the raw find command if
-;;; you want too (still within helm)
 
 (defun f3--do (&optional initial-input preserve-complement)
   (let* ((last-cand
