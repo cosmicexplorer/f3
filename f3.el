@@ -12,9 +12,12 @@
 ;; 1. Finding a file in a project really fast.
 ;; 2. Finding some complex set of files and performing some action on them.
 
-;;; TODO: show state of undo/redo in some readable way
-;;; TODO: make directory-changing functions as separate package
-;;; TODO: fix highlighting of results in helm and highlighting of previews
+;; Further documentation available at https://github.com/cosmicexplorer/f3
+
+
+;; Further work:
+;; TODO: show state of undo/redo in some readable way
+;; TODO: fix highlighting of results in helm and highlighting of previews
 
 
 ;;; Code:
@@ -36,6 +39,7 @@
 
 (defcustom f3-find-program "find"
   "Default command to find files with using `f3'."
+  :type 'string
   :group 'f3)
 
 (defcustom f3-default-directory 'project
@@ -49,6 +53,11 @@ returning a directory path."
 
 (defcustom f3-before-args '("-not" "-ipath" "*.git*")
   "Arguments to be placed before all calls to find."
+  :type '(repeat string)
+  :group 'f3)
+
+(defcustom f3-project-base-file-regexen '("^\\.git$")
+  "Regular expressions denoting files which are the \"base\" of a project."
   :type '(repeat string)
   :group 'f3)
 
@@ -77,8 +86,6 @@ returning a directory path."
 (defconst f3--start-anchors '("\\`" "^"))
 (defconst f3--end-anchors '("\\'" "$"))
 (defconst f3--shell-wildcards '("*"))
-
-(defconst f3--interactive-shell-buf "*f3-shell*")
 
 
 ;; Global variables
@@ -407,13 +414,25 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--async-action (cand)
   (f3--sync-action (f3--async-display-to-real cand)))
 
-;;; TODO: implement this!!! use some external library
-(defun f3--use-project-dir (from)
-  (error "can't find project dir!"))
+(defun f3--find-base-files (dir)
+  (let ((joined-regexp
+         (mapconcat #'identity f3-project-base-file-regexen "\\|")))
+    (with-temp-buffer
+      (insert (mapconcat #'identity (directory-files dir) "\n"))
+      (goto-char (point-min))
+      (re-search-forward joined-regexp nil t))))
 
-(defun f3--use-file-dir (_)
-  (with-current-buffer (or f3--source-buffer (current-buffer))
-    default-directory))
+(defun f3--string-starts-with (str start-str)
+  (string-match-p (concat "\\`" (regexp-quote start-str)) str))
+
+(defun f3--use-project-dir (from)
+  (cl-loop for dir = (expand-file-name from)
+           then (expand-file-name (concat dir "/.."))
+           with found = nil
+           until (f3--string-starts-with (expand-file-name "~") dir)
+           do (setq found (f3--find-base-files dir))
+           until found
+           finally return (if found dir from)))
 
 (defun f3--explicitly-choose-dir (from)
   (expand-file-name (read-directory-name "Directory to search: " from nil t)))
@@ -426,10 +445,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (or f3--cached-dir
         (setq f3--cached-dir
               (if (functionp f3-default-directory)
-                  (f3-default-directory (current-buffer))
+                  (f3-default-directory default-directory)
                 (cl-case f3-default-directory
-                  (project (f3--use-project-dir))
-                  (choose (f3--explicitly-choose-dir))
+                  (project (f3--use-project-dir default-directory))
+                  (choose (f3--explicitly-choose-dir default-directory))
                   (t default-directory)))))))
 
 (defmacro f3--run-after-exit (&rest body)
