@@ -35,35 +35,35 @@
 (defcustom f3-default-mode :text
   "Default input mode for `f3' patterns."
   :type 'symbol
-  :safe t
+  :safe #'f3--always-valid
   :group 'f3)
 
 (defcustom f3-find-program "find"
   "Default command to find files with using `f3'."
   :type 'string
-  :safe t
+  :safe #'f3--always-valid
   :group 'f3)
 
 (defcustom f3-default-directory 'project
   "Default directory to set as pwd when running `f3'. 'project for the project
 directory, 'choose to choose every time, and nil (or anything else) to choose
 the current directory of the buffer in which `f3' is run. See the source of
-`f3--choose-dir' for details. Can be a function accepting the current buffer and
-returning a directory path."
-  :type '(choice symbol function)
-  :safe t
+`f3--choose-dir' for details. Can be a function accepting the current directory
+and returning a directory path."
+  :type '(choice symbol function string)
+  :safe #'f3--validate-default-directory
   :group 'f3)
 
 (defcustom f3-before-args '("-not" "-ipath" "*.git*")
   "Arguments to be placed before all calls to find."
   :type '(repeat string)
-  :safe t
+  :safe #'f3--always-valid
   :group 'f3)
 
 (defcustom f3-project-base-file-regexen '("^\\.git$")
   "Regular expressions denoting files which are the \"base\" of a project."
   :type '(repeat string)
-  :safe t
+  :safe #'f3--always-valid
   :group 'f3)
 
 
@@ -150,6 +150,11 @@ are killed at the end of a session.")
 
 
 ;; Functions
+(defun f3--validate-default-directory (val)
+  (or (stringp val) (symbolp val)))
+
+(defun f3--always-valid (_) t)
+
 (defun f3--wildcard-unless-meta (pat start-anchors end-anchors insert)
   "Surround PAT with INSERT on both sides, unless PAT has an anchor on either
 side (as denoted by lists START-ANCHORS and END-ANCHORS)."
@@ -451,12 +456,14 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (with-current-buffer (or f3--source-buffer (current-buffer))
     (or f3--cached-dir
         (setq f3--cached-dir
-              (if (functionp f3-default-directory)
-                  (funcall f3-default-directory default-directory)
-                (cl-case f3-default-directory
-                  (project (f3--use-project-dir default-directory))
-                  (choose (f3--explicitly-choose-dir default-directory))
-                  (t default-directory)))))))
+              (cond ((functionp f3-default-directory)
+                     (funcall f3-default-directory default-directory))
+                    ((stringp f3-default-directory) f3-default-directory)
+                    (t
+                     (cl-case f3-default-directory
+                       (project (f3--use-project-dir default-directory))
+                       (choose (f3--explicitly-choose-dir default-directory))
+                       (t default-directory))))))))
 
 (defmacro f3--run-after-exit (&rest body)
   `(helm-run-after-exit (lambda () ,@body)))
