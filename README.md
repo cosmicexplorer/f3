@@ -45,7 +45,6 @@ When the results shown interactively in the helm buffer appear to match what is 
     - <kbd>M-x</kbd> = regex mode
     - <kbd>M-r</kbd> = "find" mode (just input raw find arguments)
     - <kbd>M-f</kbd> = filetype (`b|c|d|f|l|p|s`)
-        - explode if not recognized
     - <kbd>M-p</kbd> = perm
 - complement: this toggles whether `-not` is applied to the current predicate
     - <kbd>M-q</kbd> = toggle complement (current)
@@ -56,7 +55,6 @@ When the results shown interactively in the helm buffer appear to match what is 
     - <kbd>M-b</kbd> = bounce to raw
 - meta
     - <kbd>M-u</kbd> = undo whatever was just done
-        - also usable to edit atoms earlier (further left) in the stack and then return right
     - <kbd>M-U</kbd> = redo
     - <kbd>M-<</kbd> = set `mindepth`
     - <kbd>M-></kbd> = set `maxdepth`
