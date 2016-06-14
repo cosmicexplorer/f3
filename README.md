@@ -49,6 +49,7 @@ Find files fast, using helm. It's cool, trust me.
         - <kbd>M-U</kbd> = redo
         - <kbd>M-<</kbd> = set `mindepth`
         - <kbd>M-></kbd> = set `maxdepth`
+        - <kbd>M-R</kbd> = restore from previous command
 
 ## other helm things in general
 

@@ -25,6 +25,7 @@
 ;;; results that fill in as you type
 ;;; TODO: show state of undo/redo in some readable way
 ;;; TODO: make directory-changing functions as separate package
+;;; TODO: fix highlighting of results in helm and highlighting of previews
 
 
 ;;; Code:
@@ -115,7 +116,7 @@ are killed at the end of a session.")
     :action (helm-make-actions "Visit" #'f3--async-action)
     :persistent-action #'f3--async-persistent-action
     :filter-one-by-one #'f3--async-filter-function
-    :cleanup #'f3--clear-opened-persistent-buffers)
+    :cleanup #'f3--cleanup)
   "Source searching files within a given directory using the find command.")
 
 (defvar f3--last-selected-candidate nil
@@ -135,8 +136,7 @@ are killed at the end of a session.")
 
 (defvar f3--temp-pattern nil)
 
-(defvar f3--shell-command nil)
-(defvar f3--interactive-p nil)
+(defvar f3--prev-stack-and-cur nil)
 
 
 ;; Buffer-local variables
@@ -342,23 +342,20 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         ;; n.b.: `f3--async-filter-function' depends upon the "." literal
         (let* ((all-args `(,f3-find-program "." ,@args))
                (default-directory f3--cached-dir)
-               (err-proc (make-pipe-process
-                          :name f3--err-proc-name
-                          :buffer f3--err-buf-name
-                          :command '("cat")))
+               (err-proc
+                (progn
+                  (when (process-live-p f3--err-proc-name)
+                    (kill-process f3--err-proc-name))
+                  (make-pipe-process
+                   :name f3--err-proc-name
+                   :buffer f3--err-buf-name
+                   :command '("cat"))))
                (real-proc
                 (make-process
                  :name f3--proc-name
                  :buffer f3--buf-name
                  :command all-args
-                 :stderr err-proc
-                 :sentinel (lambda (proc ev)
-                             (run-with-timer
-                              0 nil
-                              (lambda ()
-                                (when (and (not (process-live-p proc))
-                                           (process-live-p err-proc))
-                                  (kill-process err-proc))))))))
+                 :stderr err-proc)))
           (set-process-filter
            err-proc
            (lambda (proc ev)
@@ -375,6 +372,15 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
            (format "%s: %s" f3--cached-dir (mapconcat #'identity all-args " "))
            f3--find-process-source)
           real-proc)))))
+
+(defun f3--cleanup ()
+  (f3--save-previous-command)
+  (f3--clear-opened-persistent-buffers))
+
+(defun f3--save-previous-command ()
+  (setq f3--prev-stack-and-cur
+        (list f3--current-redo-stack
+              (f3--pattern-to-parsed-arg helm-pattern))))
 
 (defun f3--clear-opened-persistent-buffers ()
   (cl-mapc #'kill-buffer f3--currently-opened-persistent-buffers)
@@ -541,6 +547,16 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                                      (eq (cdr cur) :right-paren)))
            finally return head))
 
+(defun f3--restore-from-previous-command ()
+  (interactive)
+  (when f3--prev-stack-and-cur
+    (cl-destructuring-bind (redo-stack cur-pat)
+        f3--prev-stack-and-cur
+      (f3--run-after-exit
+       (let ((f3--current-redo-stack redo-stack)
+             (f3--current-operator-stack redo-stack))
+         (f3--set-current-pattern-from-link cur-pat))))))
+
 (defun f3--set-current-pattern-from-link (link &optional comp)
   (let ((f3--current-complement comp))
     (if (memq (car link) f3--combinators)
@@ -640,41 +656,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (f3--run-after-exit
      (find-dired dir raw-cmd))))
 
-(defun f3--add-to-list-functional (elt seq)
-  (if (cl-find elt seq) seq (cons elt seq)))
-
-(defun f3--regen-buffer-results (buf)
-  (let))
-
-(defun f3--run-shell-interactively ()
-  (interactive)
-  (let ((f3--shell-command
-         (or f3--shell-command
-             (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " ")))
-        (dir default-directory))
-    (f3--run-after-exit
-     (let ((default-directory dir)
-           (f3--interactive-p t)
-           (output-buf (generate-new-buffer f3--interactive-shell-buf))
-           (post-self-insert-hook
-            (f3--add-to-list-functional
-             #'f3--regen-buffer-results post-self-insert-hook)))))))
-
-(defun f3--run-shell (&optional pfx)
-  (interactive "P")
-  (if pfx (f3--run-shell-interactively)
-    (let ((f3--shell-command
-           (or f3--shell-command
-               (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " ")))
-          (dir default-directory))
-      (f3--run-after-exit
-       (let ((default-directory dir)
-             (f3--interactive-p nil))
-         (async-shell-command
-          (format "find . %s | %s" f3--shell-command
-                  (read-from-minibuffer "shell command: " nil nil nil
-                                        'shell-command-history))))))))
-
 (defun f3--do (&optional initial-input preserve-complement)
   (let* ((last-cand
           (if (buffer-live-p f3--last-selected-candidate)
@@ -721,7 +702,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-U") #'f3--redo)
     (define-key map (kbd "M-b") #'f3--bounce-to-raw)
     (define-key map (kbd "M-d") #'f3--dump-to-dired)
-    (define-key map (kbd "M-g") #'f3--run-shell)
+    (define-key map (kbd "M-R") #'f3--restore-from-previous-command)
     map)
   "Keymap for `f3'.")
 
