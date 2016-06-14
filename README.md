@@ -1,9 +1,7 @@
 f<sup>3</sup>
 =============
 
-The Fantastic File Finder, for emacs.
-
-Find files fast, using helm. It's cool, trust me.
+The Fantastic File Finder for emacs. Find files fast, using helm. It's cool, trust me.
 
 # Motivation
 
@@ -37,7 +35,7 @@ When the results shown interactively in the helm buffer appear to match what is 
 - combinators: these set `f3-current-combinator`, take the current pattern as the find predicate, and clear the minibuffer
     - <kbd>M-+</kbd> = union ("or")
     - <kbd>M-*</kbd> = intersection ("and")
-- groupings: these call `f3-(open/close)-paren` and clear the minubuffer
+- groupings: these add open or closed parentheses to the current find command and clear the minibuffer
     - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
     - <kbd>C-u M-(</kbd> = open paren, with `-not` on
     - <kbd>M-) M-+</kbd> = close paren / or (left parens will be implicitly added if needed)
