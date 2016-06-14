@@ -2,7 +2,7 @@
 
 ;; Author: Danny McClanahan <danieldmcclanahan@gmail.com>
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24") (helm "1.9.6") (cl-lib "0.5"))
+;; Package-Requires: ((emacs "25") (helm "1.9.6"))
 ;; Keywords: find, file, files, helm, fast, finder
 
 
