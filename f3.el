@@ -60,7 +60,7 @@ and returning a directory path."
   :safe #'f3--always-valid
   :group 'f3)
 
-(defcustom f3-project-base-file-regexen '("^\\.git$")
+(defcustom f3-project-base-file-regexen '("\\`\\.git\\'")
   "Regular expressions denoting files which are the \"base\" of a project."
   :type '(repeat string)
   :safe #'f3--always-valid
@@ -427,12 +427,12 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (f3--sync-action (f3--async-display-to-real cand)))
 
 (defun f3--find-base-files (dir)
-  (let ((joined-regexp
-         (mapconcat #'identity f3-project-base-file-regexen "\\|")))
-    (with-temp-buffer
-      (insert (mapconcat #'identity (directory-files dir) "\n"))
-      (goto-char (point-min))
-      (re-search-forward joined-regexp nil t))))
+  (cl-some
+   (lambda (file)
+     (cl-some (lambda (regexp)
+                (string-match-p regexp file))
+              f3-project-base-file-regexen))
+   (directory-files dir)))
 
 (defun f3--string-starts-with (str start-str)
   (string-match-p (concat "\\`" (regexp-quote start-str)) str))
