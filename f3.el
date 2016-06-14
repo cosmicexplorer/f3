@@ -12,17 +12,6 @@
 ;; 1. Finding a file in a project really fast.
 ;; 2. Finding some complex set of files and performing some action on them.
 
-;;; TODO: make a version of find which ignores .gitignore/.agignore/etc
-;;; check out https://git-scm.com/docs/git-check-ignore, as well as just
-;;; implementing that in elisp and using it as part of the filter function
-;;; (regenerating this whenever the directory is changed)
-;;; TODO: add "use previous find command" command to use
-;;; run-{lisp,shell}{,-interactively} or to just list files; also do this for
-;;; find-dired and for bounce-to-raw
-;;; TODO: run-lisp-interactively could read in an expression which resolves to a
-;;; function or lambda (accepting either each file individually or the entire
-;;; list) and attach itself to a process filter or sentinel to get nonblocking
-;;; results that fill in as you type
 ;;; TODO: show state of undo/redo in some readable way
 ;;; TODO: make directory-changing functions as separate package
 ;;; TODO: fix highlighting of results in helm and highlighting of previews
@@ -56,6 +45,11 @@ the current directory of the buffer in which `f3' is run. See the source of
 `f3--choose-dir' for details. Can be a function accepting the current buffer and
 returning a directory path."
   :type '(choice symbol function)
+  :group 'f3)
+
+(defcustom f3-before-args '("-not" "-ipath" "*.git*")
+  "Arguments to be placed before all calls to find."
+  :type '(repeat string)
   :group 'f3)
 
 
@@ -332,8 +326,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--get-find-args ()
   (let ((final-pat (f3--get-ast)))
     (when final-pat
-      (let ((args-minus-depth (f3--parsed-to-command final-pat)))
-        (f3--add-depths-to-args args-minus-depth)))))
+      (let* ((args-minus-depth (f3--parsed-to-command final-pat))
+             (depth-args (f3--add-depths-to-args args-minus-depth)))
+        (if f3-before-args
+            `("(" ,@f3-before-args ")" "-and" "(" ,@depth-args ")")
+          depth-args)))))
 
 (defun f3--make-process ()
   (let ((args (f3--get-find-args)))
