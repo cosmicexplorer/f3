@@ -17,12 +17,14 @@
 ;;; implementing that in elisp and using it as part of the filter function
 ;;; (regenerating this whenever the directory is changed)
 ;;; TODO: add "use previous find command" command to use
-;;; run-{lisp,shell}{,-interactively} or to just list files
+;;; run-{lisp,shell}{,-interactively} or to just list files; also do this for
+;;; find-dired and for bounce-to-raw
 ;;; TODO: run-lisp-interactively could read in an expression which resolves to a
 ;;; function or lambda (accepting either each file individually or the entire
 ;;; list) and attach itself to a process filter or sentinel to get nonblocking
 ;;; results that fill in as you type
-;;; TODO: show state of undo/redo in some usable way
+;;; TODO: show state of undo/redo in some readable way
+;;; TODO: make directory-changing functions as separate package
 
 
 ;;; Code:
@@ -65,9 +67,6 @@ returning a directory path."
     (:perm . f3--create-perm-pattern))
   "Modes which interpret the current `helm-pattern' differently.")
 
-(defconst f3--valid-filetype-patterns '("b" "c" "d" "f" "l" "p" "s")
-  "Valid filetype arguments to unix find.")
-
 (defconst f3--combinators '(:and :or))
 
 (defconst f3--helm-buffer-name "*f3*")
@@ -83,6 +82,8 @@ returning a directory path."
 (defconst f3--start-anchors '("\\`" "^"))
 (defconst f3--end-anchors '("\\'" "$"))
 (defconst f3--shell-wildcards '("*"))
+
+(defconst f3--interactive-shell-buf "*f3-shell*")
 
 
 ;; Global variables
@@ -133,6 +134,9 @@ are killed at the end of a session.")
 (defvar f3--current-maxdepth nil)
 
 (defvar f3--temp-pattern nil)
+
+(defvar f3--shell-command nil)
+(defvar f3--interactive-p nil)
 
 
 ;; Buffer-local variables
@@ -608,13 +612,15 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defmacro f3--clear-session-variables (&rest body)
   `(let ((f3--current-mode f3-default-mode)
-         (f3--current-complement nil)
-         (f3--current-operator-stack nil)
-         (f3--current-redo-stack nil)
+         f3--current-complement
+         f3--current-operator-stack
+         f3--current-redo-stack
          (f3--match-buffers t)
-         (f3--current-mindepth nil)
-         (f3--current-maxdepth nil)
-         (f3--temp-pattern nil))
+         f3--current-mindepth
+         f3--current-maxdepth
+         f3--temp-pattern
+         f3--shell-command
+         f3--interactive-p)
      ,@body))
 
 (defun f3--bounce-to-raw ()
@@ -625,7 +631,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
       (let ((f3--current-mode :raw))
         (f3--do raw-cmd))))))
 
-(defun f3--surround-with-quotes (str) (format "\"%s\"" str))
+(defun f3--surround-with-quotes (str) (format "'%s'" str))
 
 (defun f3--dump-to-dired ()
   (interactive)
@@ -633,6 +639,41 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         (dir default-directory))
     (f3--run-after-exit
      (find-dired dir raw-cmd))))
+
+(defun f3--add-to-list-functional (elt seq)
+  (if (cl-find elt seq) seq (cons elt seq)))
+
+(defun f3--regen-buffer-results (buf)
+  (let))
+
+(defun f3--run-shell-interactively ()
+  (interactive)
+  (let ((f3--shell-command
+         (or f3--shell-command
+             (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " ")))
+        (dir default-directory))
+    (f3--run-after-exit
+     (let ((default-directory dir)
+           (f3--interactive-p t)
+           (output-buf (generate-new-buffer f3--interactive-shell-buf))
+           (post-self-insert-hook
+            (f3--add-to-list-functional
+             #'f3--regen-buffer-results post-self-insert-hook)))))))
+
+(defun f3--run-shell (&optional pfx)
+  (interactive "P")
+  (if pfx (f3--run-shell-interactively)
+    (let ((f3--shell-command
+           (or f3--shell-command
+               (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " ")))
+          (dir default-directory))
+      (f3--run-after-exit
+       (let ((default-directory dir)
+             (f3--interactive-p nil))
+         (async-shell-command
+          (format "find . %s | %s" f3--shell-command
+                  (read-from-minibuffer "shell command: " nil nil nil
+                                        'shell-command-history))))))))
 
 (defun f3--do (&optional initial-input preserve-complement)
   (let* ((last-cand
@@ -653,7 +694,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           :keymap f3-map)))
 
 
-;; Keymap
+;; Keymaps
 (defconst f3-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map helm-map)
@@ -680,6 +721,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-U") #'f3--redo)
     (define-key map (kbd "M-b") #'f3--bounce-to-raw)
     (define-key map (kbd "M-d") #'f3--dump-to-dired)
+    (define-key map (kbd "M-g") #'f3--run-shell)
     map)
   "Keymap for `f3'.")
 

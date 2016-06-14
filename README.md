@@ -3,7 +3,7 @@ f<sup>3</sup>
 
 The Fantastic File Finder, for emacs.
 
-Find files fast, using helm. It'll be cool, trust me.
+Find files fast, using helm. It's cool, trust me.
 
 # Goals
 
@@ -12,6 +12,7 @@ Find files fast, using helm. It'll be cool, trust me.
 2. run `find` with args
 3. select multiple files and perform actions on them
 4. do it fast
+    - what does "fast" mean? who knows?
 
 # Ideas
 ## use helm as a frontend
@@ -24,7 +25,8 @@ Find files fast, using helm. It'll be cool, trust me.
         - <kbd>M-*</kbd> = intersection ("and")
     - groupings: these call `f3-(open/close)-paren` and reset helm
         - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
-        - <kbd>M-)</kbd> = close paren
+        - <kbd>M-) M-+</kbd> = close paren / or (left parens will be implicitly added if needed)
+        - <kbd>M-) M-*</kbd> = close paren / and
     - modes: these do NOT reset helm, just change `f3-current-mode`
         - <kbd>M-t</kbd> = normal text mode (not regex mode)
         - <kbd>M-x</kbd> = regex mode
@@ -44,7 +46,7 @@ Find files fast, using helm. It'll be cool, trust me.
     - meta
         - <kbd>M-u</kbd> = undo whatever was just done
             - also usable to edit atoms earlier (further left) in the stack and then return right
-        - <kbd>M-S-u</kbd> = redo
+        - <kbd>M-U</kbd> = redo
         - <kbd>M-<</kbd> = set `mindepth`
         - <kbd>M-></kbd> = set `maxdepth`
 
