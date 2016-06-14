@@ -1,7 +1,7 @@
 ;;; f3.el --- The Fantastic File Finder: a helm interface for searching files really fast -*- lexical-binding: t -*-
 
 ;; Author: Danny McClanahan <danieldmcclanahan@gmail.com>
-;; Version 0.1
+;; Version: 0.1
 ;; Package-Requires: ((emacs "24") (helm "1.9.6") (cl-lib "0.5"))
 ;; Keywords: find, file, files, helm, fast, finder
 
@@ -35,11 +35,13 @@
 (defcustom f3-default-mode :text
   "Default input mode for `f3' patterns."
   :type 'symbol
+  :safe t
   :group 'f3)
 
 (defcustom f3-find-program "find"
   "Default command to find files with using `f3'."
   :type 'string
+  :safe t
   :group 'f3)
 
 (defcustom f3-default-directory 'project
@@ -49,16 +51,19 @@ the current directory of the buffer in which `f3' is run. See the source of
 `f3--choose-dir' for details. Can be a function accepting the current buffer and
 returning a directory path."
   :type '(choice symbol function)
+  :safe t
   :group 'f3)
 
 (defcustom f3-before-args '("-not" "-ipath" "*.git*")
   "Arguments to be placed before all calls to find."
   :type '(repeat string)
+  :safe t
   :group 'f3)
 
 (defcustom f3-project-base-file-regexen '("^\\.git$")
   "Regular expressions denoting files which are the \"base\" of a project."
   :type '(repeat string)
+  :safe t
   :group 'f3)
 
 
@@ -296,7 +301,9 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
               left (cdr res)))
    finally return (let ((real-reduced
                          (if (and reduced (eq comb :left-paren))
-                             `(:paren ,reduced)
+                             (if (eq (car atom) :not)
+                                 `(:not (:paren ,reduced))
+                               `(:paren ,reduced))
                            reduced)))
                     (cons real-reduced left))))
 
@@ -498,11 +505,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           (f3--match-buffers nil))
      (f3--do))))
 
-(defun f3--left-paren ()
-  (interactive)
+(defun f3--left-paren (pfx)
+  (interactive "P")
   (f3--run-after-exit
    (let* ((f3--current-operator-stack
-           (cons (list :left-paren) f3--current-operator-stack))
+           (cons (list :left-paren (when pfx :not)) f3--current-operator-stack))
           (f3--current-redo-stack f3--current-operator-stack)
           (f3--temp-pattern nil)
           (f3--match-buffers nil))
