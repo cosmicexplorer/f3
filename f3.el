@@ -452,7 +452,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (or f3--cached-dir
         (setq f3--cached-dir
               (if (functionp f3-default-directory)
-                  (f3-default-directory default-directory)
+                  (funcall f3-default-directory default-directory)
                 (cl-case f3-default-directory
                   (project (f3--use-project-dir default-directory))
                   (choose (f3--explicitly-choose-dir default-directory))
