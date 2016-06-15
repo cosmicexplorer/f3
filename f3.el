@@ -44,7 +44,7 @@
   :safe #'f3--always-valid
   :group 'f3)
 
-(defcustom f3-default-directory 'project
+(defcustom f3-default-directory 'default
   "Default directory to set as pwd when running `f3'. 'project for the project
 directory, 'choose to choose every time, and nil (or anything else) to choose
 the current directory of the buffer in which `f3' is run. See the source of
