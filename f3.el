@@ -684,7 +684,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--dump-to-dired ()
   (interactive)
   (let ((raw-cmd (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " "))
-        (dir default-directory))
+        (dir (with-current-buffer f3--source-buffer f3--cached-dir)))
     (f3--run-after-exit
      (find-dired dir raw-cmd))))
 
