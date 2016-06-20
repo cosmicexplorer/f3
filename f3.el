@@ -45,7 +45,7 @@
   :safe #'f3--always-valid
   :group 'f3)
 
-(defcustom f3-default-directory 'project
+(defcustom f3-default-directory 'default
   "Default directory to set as pwd when running `f3'. 'project for the project
 directory, 'choose to choose every time, and nil (or anything else) to choose
 the current directory of the buffer in which `f3' is run. See the source of
@@ -350,9 +350,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (when final-pat
       (let* ((args-minus-depth (f3--parsed-to-command final-pat))
              (depth-args (f3--add-depths-to-args args-minus-depth)))
-        (if f3-before-args
-            `("(" ,@f3-before-args ")" "-and" "(" ,@depth-args ")")
-          depth-args)))))
+        (with-current-buffer f3--source-buffer
+          (if f3-before-args
+              `("(" ,@f3-before-args ")" "-and" "(" ,@depth-args ")")
+            depth-args))))))
 
 (defun f3--empty-file (fname)
   (with-temp-buffer
@@ -511,10 +512,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--choose-dir-and-rerun (dir-fun)
   (lambda ()
     (interactive)
-    (with-current-buffer f3--source-buffer
-      (f3--run-after-exit
-       (let ((f3--cached-dir (funcall dir-fun f3--cached-dir)))
-         (f3--do helm-pattern t))))))
+    (let ((pat helm-pattern))
+      (with-current-buffer f3--source-buffer
+        (f3--run-after-exit
+         (let ((f3--cached-dir (funcall dir-fun f3--cached-dir)))
+           (f3--do pat t)))))))
 
 (defun f3--set-mode-and-rerun (mode)
   (lambda ()
@@ -722,7 +724,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--dump-to-dired ()
   (interactive)
   (let ((raw-cmd (mapconcat #'f3--surround-with-quotes (f3--get-find-args) " "))
-        (dir default-directory))
+        (dir (with-current-buffer f3--source-buffer f3--cached-dir)))
     (f3--run-after-exit
      (find-dired dir raw-cmd))))
 
