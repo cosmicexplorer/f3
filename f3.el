@@ -113,7 +113,7 @@
 ;;   - 'M-b' = bounce to raw (can use 'M-R' afterwards to restore previous)
 ;; - meta ;; - 'M-u' = undo whatever was just done
 ;;   - 'M-U' = redo
-;;   - <kbd>M-<</kbd> = set 'mindepth'
+;;   - 'M-<' = set 'mindepth'
 ;;   - 'M->' = set 'maxdepth'
 ;;   - 'M-R' = restore from previous command
 ;; - changing directories ;; - 'M-o' = start search from project root
@@ -130,17 +130,18 @@
 ;; section of the lisp file after changing this README. Run 'npm install' if
 ;; it complains about node modules.
 
-;; End Commentary
-
 
-;; Further work:
-;; TODO: show state of undo/redo in some readable way
-;; TODO: fix highlighting of results in helm and highlighting of previews; maybe
+;; Further Work:
+
+;; - show state of undo/redo in some readable way
+;; - fix highlighting of results in helm and highlighting of previews; maybe
 ;; use some logic in ; `f3--filter-buffer-candidates'?
-;; TODO: add readme to commentary section
-;; TODO: make M-R/C-M-R a stack instead of a single variable
-;; TODO: make f3-default-directory be able to refer to a filename relative to a
+;; - add readme to commentary section
+;; - make M-R/C-M-R a stack instead of a single variable
+;; - make f3-default-directory be able to refer to a filename relative to a
 ;; .dir-locals.el file or whatnot
+
+;; End Commentary
 
 
 ;;; Code:

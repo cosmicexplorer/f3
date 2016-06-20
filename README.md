@@ -69,6 +69,15 @@ When the results shown interactively in the helm buffer appear to match what is 
 
 Run `./update-commentary.el` in this directory to update the commentary section of the lisp file after changing this README. Run `npm install` if it complains about node modules.
 
+# Further Work
+
+- show state of undo/redo in some readable way
+- fix highlighting of results in helm and highlighting of previews; maybe use some logic in ; `f3--filter-buffer-candidates'?
+- add readme to commentary section
+- make M-R/C-M-R a stack instead of a single variable
+- make f3-default-directory be able to refer to a filename relative to a .dir-locals.el file or whatnot
+
+
 # License
 
 [GPL](GPL.md)

@@ -7,7 +7,7 @@ wordwrap = require 'wordwrap'
 processHeader = (node) -> "\n;; #{node[2]}:\n"
 
 processText = (node) ->
-  node.replace(/<kbd>([^<]*)<\/kbd>/g, (all, g1) -> "'#{g1}'")
+  node.replace(/<kbd>(.*?)<\/kbd>/g, (all, g1) -> "'#{g1}'")
 
 processLines = (text) ->
   linesText = wordwrap(77, {mode: 'soft'})(text)
