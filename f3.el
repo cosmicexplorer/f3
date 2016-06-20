@@ -25,12 +25,13 @@
 (require 'cl-lib)
 (require 'helm)
 (require 'helm-multi-match)
-(require 'subr-x)
+(require 'pcase)
 (require 'find-dired)
 
 
 ;; Customization
-(defgroup f3 nil "Group for `f3' customizations.")
+(defgroup f3 nil "Group for `f3' customizations."
+  :group 'find-file)
 
 (defcustom f3-default-mode :text
   "Default input mode for `f3' patterns."
@@ -144,9 +145,14 @@ are killed at the end of a session.")
 
 (defvar f3--prev-stack-and-cur nil)
 
+(defvar f3--temp-err-file nil)
+
 
 ;; Buffer-local variables
 (defvar-local f3--cached-dir nil)
+
+(defvar-local f3--has-dumped-find-err nil
+  "Whether errors from running find have already been sent to `helm' output.")
 
 
 ;; Functions
@@ -181,10 +187,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (let ((texts (helm-mm-split-pattern pat)))
     (cl-reduce
      (lambda (parsed1 parsed2) `(:and ,parsed1 ,parsed2))
-     (cl-mapcar
-      (lambda (pat)
-        `(:text ,pat))
-      texts))))
+     (cl-mapcar (lambda (pat) `(:text ,pat)) texts))))
 
 (defun f3--dot-star-unless-anchor (pat)
   (f3--wildcard-unless-meta pat f3--start-anchors f3--end-anchors ".*"))
@@ -325,7 +328,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--get-ast ()
   (let ((current-pattern
-         (unless (string-empty-p helm-pattern)
+         (unless (string= "" helm-pattern)
            (f3--pattern-to-parsed-arg helm-pattern))))
     (f3--swallow-left-parens current-pattern f3--current-operator-stack)))
 
@@ -351,6 +354,54 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
             `("(" ,@f3-before-args ")" "-and" "(" ,@depth-args ")")
           depth-args)))))
 
+(defun f3--empty-file (fname)
+  (with-temp-buffer
+    (write-region (point-min) (point-max) fname nil 'nomsg)))
+
+(defmacro f3--kill-process-and-run-in-buffer (buf &rest body)
+  (declare (indent 1))
+  (let ((proc (cl-gensym)))
+    `(with-current-buffer (get-buffer-create ,buf)
+       (let ((,proc (get-buffer-process (current-buffer))))
+         (when (process-live-p ,proc) (kill-process ,proc)))
+       (erase-buffer)
+       ,@body)))
+
+(defun f3--restart-err-proc ()
+  (f3--kill-process-and-run-in-buffer f3--err-buf-name
+    (setq-local f3--has-dumped-find-err nil))
+  (f3--empty-file f3--temp-err-file)
+  (let* ((args-list
+          `("tail" "-f" ,(shell-quote-argument f3--temp-err-file)
+            "2>" "/dev/null"))
+         (err-cmd (mapconcat #'identity args-list " ")))
+    (start-process-shell-command f3--err-proc-name f3--err-buf-name err-cmd)))
+
+(defun f3--make-find-process (args)
+  (f3--kill-process-and-run-in-buffer f3--buf-name
+    (setq-local f3--has-dumped-find-err nil))
+  (let ((final-cmd (mapconcat #'shell-quote-argument args " ")))
+    (start-process-shell-command
+     f3--proc-name f3--buf-name
+     (format "%s 2> %s" final-cmd (shell-quote-argument f3--temp-err-file)))))
+
+(defun f3--signal-results-on-err (real-proc proc ev)
+  (with-current-buffer (process-buffer proc) (insert ev))
+  (when (and (not (zerop (process-exit-status real-proc)))
+             (not (with-current-buffer f3--err-buf-name
+                    f3--has-dumped-find-err)))
+    (with-current-buffer (helm-buffer-get)
+      (erase-buffer)
+      (let ((err-msg (propertize "find failed with error:"
+                                 'face f3--err-msg-props))
+            (buf-str (with-current-buffer (process-buffer proc)
+                       (buffer-string))))
+        (insert (format "%s\n%s" err-msg buf-str)))
+      (when (process-live-p real-proc) (kill-process real-proc))
+      (with-current-buffer f3--err-buf-name
+        (setq-local f3--has-dumped-find-err t)))))
+
+;;; TODO: make bounce to raw use previous-command too
 (defun f3--make-process ()
   (let ((args (f3--get-find-args)))
     (when args
@@ -358,40 +409,20 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         ;; n.b.: `f3--async-filter-function' depends upon the "." literal
         (let* ((all-args `(,f3-find-program "." ,@args))
                (default-directory f3--cached-dir)
-               (err-proc
-                (progn
-                  (when (process-live-p f3--err-proc-name)
-                    (kill-process f3--err-proc-name))
-                  (make-pipe-process
-                   :name f3--err-proc-name
-                   :buffer f3--err-buf-name
-                   :command '("cat"))))
-               (real-proc
-                (make-process
-                 :name f3--proc-name
-                 :buffer f3--buf-name
-                 :command all-args
-                 :stderr err-proc)))
-          (set-process-filter
-           err-proc
-           (lambda (proc ev)
-             (if (zerop (process-exit-status real-proc))
-                 (with-current-buffer (process-buffer proc) (insert ev))
-               (with-current-buffer (helm-buffer-get)
-                 (erase-buffer)
-                 (let ((err-msg (propertize "find failed with error:"
-                                            'face f3--err-msg-props)))
-                   (insert (format "%s\n%s" err-msg ev)))
-                 (when (process-live-p real-proc) (kill-process real-proc))))))
+               (err-proc (f3--restart-err-proc))
+               (real-proc (f3--make-find-process all-args))
+               (err-filter-sentinel
+                (lambda (proc ev)
+                  (f3--signal-results-on-err real-proc proc ev))))
+          (set-process-filter err-proc err-filter-sentinel)
+          (set-process-sentinel err-proc err-filter-sentinel)
+          (set-process-query-on-exit-flag err-proc nil)
+          (set-process-query-on-exit-flag real-proc nil)
           (helm-attrset
            'name
            (format "%s: %s" f3--cached-dir (mapconcat #'identity all-args " "))
            f3--find-process-source)
           real-proc)))))
-
-(defun f3--cleanup ()
-  (f3--save-previous-command)
-  (f3--clear-opened-persistent-buffers))
 
 (defun f3--save-previous-command ()
   (setq f3--prev-stack-and-cur
@@ -401,6 +432,15 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--clear-opened-persistent-buffers ()
   (cl-mapc #'kill-buffer f3--currently-opened-persistent-buffers)
   (setq f3--currently-opened-persistent-buffers nil))
+
+(defun f3--cleanup ()
+  (f3--save-previous-command)
+  (f3--clear-opened-persistent-buffers))
+
+(defun f3--remove-temp-err-file ()
+  "Only called once, after `f3' finishes."
+  (delete-file f3--temp-err-file)
+  (setq f3--temp-err-file nil))
 
 (defun f3--sync-action (buf)
   (setq f3--last-selected-candidate buf)
@@ -741,8 +781,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 ;;;###autoload
 (defun f3 (start-dir)
   (interactive (list (f3--choose-dir)))
-  (let ((f3--source-buffer (current-buffer)))
-    (f3--clear-session-variables (f3--do))))
+  (let ((f3--source-buffer (current-buffer))
+        (f3--temp-err-file (make-temp-file "emacs-f3")))
+    (f3--clear-session-variables
+     (unwind-protect (f3--do)
+       (f3--remove-temp-err-file)))))
 
 (provide 'f3)
 ;;; f3.el ends here
