@@ -645,6 +645,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
       (cl-case (car link)
         (:not (f3--set-current-pattern-from-link (cl-second link) t))
         (:atom (f3--set-current-pattern-from-link (cl-second link) comp))
+        (:raw (let ((f3--current-mode :raw))
+                (f3--do (mapconcat #'identity (cl-second link) " ") t)))
         (t (let ((f3--current-mode (car link)))
              (f3--do (cl-second link) t)))))))
 
