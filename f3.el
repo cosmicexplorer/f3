@@ -17,7 +17,8 @@
 
 ;; Further work:
 ;; TODO: show state of undo/redo in some readable way
-;; TODO: fix highlighting of results in helm and highlighting of previews
+;; TODO: fix highlighting of results in helm and highlighting of previews; maybe
+;; use some logic in ; `f3--filter-buffer-candidates'?
 
 
 ;;; Code:
@@ -235,8 +236,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         (list (format "-%s" base) pat)
       (list (format "-i%s" base) pat))))
 
-;;; TODO: fix helm's automatic highlighting of results; maybe use some logic in
-;;; `f3--filter-buffer-candidates'?
 (defun f3--parsed-to-command (parsed-args)
   "Transform PARSED-ARGS to a raw find command."
   (pcase parsed-args
@@ -408,7 +407,6 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                          (buffer-string))))
           (insert (format "%s\n%s" err-msg buf-str)))))))
 
-;;; TODO: make bounce to raw use previous-command too
 (defun f3--make-process ()
   (let ((args (f3--get-find-args)))
     (when args
