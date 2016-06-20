@@ -52,7 +52,7 @@ When the results shown interactively in the helm buffer appear to match what is 
     - <kbd>M-d</kbd> = exit helm and list the files in a `find-dired` buffer
     - <kbd>RET</kbd> = visit
     - <kbd>TAB</kbd> = preview
-    - <kbd>M-b</kbd> = bounce to raw
+    - <kbd>M-b</kbd> = bounce to raw (can use <kbd>M-R</kbd> afterwards to restore previous)
 - meta
     - <kbd>M-u</kbd> = undo whatever was just done
     - <kbd>M-U</kbd> = redo

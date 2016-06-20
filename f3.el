@@ -723,6 +723,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--bounce-to-raw ()
   (interactive)
   (let ((raw-cmd (mapconcat #'identity (f3--get-find-args) " ")))
+    (f3--save-previous-command)
     (f3--clear-session-variables
      (f3--run-after-exit
       (let ((f3--current-mode :raw))
