@@ -1,3 +1,5 @@
+#!/usr/bin/env coffee
+
 fs = require 'fs'
 {markdown} = require 'markdown'
 wordwrap = require 'wordwrap'
@@ -70,8 +72,7 @@ readme = fs.readFileSync("#{__dirname}/README.md").toString()
 f3El = fs.readFileSync("#{__dirname}/f3.el").toString()
 
 output = f3El.replace(
-  /(Commentary:)[.\n\f]*(;; End Commentary)/g, (all, g1, g2) ->
-    console.log 'what'
+  /(;;; Commentary:)\n(;; End Commentary)/g, (all, g1, g2) ->
     tree = markdown.parse readme
     "#{g1}\n\n#{header}\n#{processTree(tree)}\n\n#{g2}")
 

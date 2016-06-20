@@ -65,6 +65,10 @@ When the results shown interactively in the helm buffer appear to match what is 
     - <kbd>M-c</kbd> = choose directory to search from, starting at whatever the current choice is
     - <kbd>M-j</kbd> = start searching a directory up
 
+# Updates
+
+Run `./update-commentary.el` in this directory to update the commentary section of the lisp file after changing this README. Run `npm install` if it complains about node modules.
+
 # License
 
 [GPL](GPL.md)

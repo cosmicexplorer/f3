@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "markdown": "^0.5.0",
+    "wordwrap": "^1.0.0"
+  }
+}

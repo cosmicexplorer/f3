@@ -21,7 +21,7 @@
 ;; specialized tools. The two this package attempts to solve are:
 
 ;; 1. Finding a particular file by name in a large project.
-;; 2. Performing operations of arbitrary complexity on many files at once
+;; 2. Performing operations of arbitrary complexity on many files at once.
 
 ;; The first is usually solved in IDEs by maintaining an index of all files in
 ;; the project. However, this requires that the project be of a type that the
@@ -122,6 +122,13 @@
 ;; current
 ;;   choice is
 ;;   - 'M-j' = start searching a directory up
+
+
+;; Updates:
+
+;; Run './update-commentary.el' in this directory to update the commentary
+;; section of the lisp file after changing this README. Run 'npm install' if
+;; it complains about node modules.
 
 ;; End Commentary
 
