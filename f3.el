@@ -434,17 +434,17 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
            f3--find-process-source)
           real-proc)))))
 
-(defun f3--save-previous-command ()
+(defun f3--save-previous-command (pat)
   (setq f3--prev-stack-and-cur
         (list f3--current-redo-stack
-              (f3--pattern-to-parsed-arg helm-pattern))))
+              (f3--pattern-to-parsed-arg pat))))
 
 (defun f3--clear-opened-persistent-buffers ()
   (cl-mapc #'kill-buffer f3--currently-opened-persistent-buffers)
   (setq f3--currently-opened-persistent-buffers nil))
 
 (defun f3--cleanup ()
-  (f3--save-previous-command)
+  (f3--save-previous-command helm-pattern)
   (f3--clear-opened-persistent-buffers))
 
 (defun f3--remove-temp-err-file ()
@@ -530,79 +530,88 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--set-mode-and-rerun (mode)
   (lambda ()
     (interactive)
-    (f3--run-after-exit
-     (let ((f3--current-mode mode))
-       (f3--do helm-pattern t)))))
+    (let ((pat helm-pattern))
+      (f3--run-after-exit
+       (let ((f3--current-mode mode))
+         (f3--do pat t))))))
 
 (defun f3--toggle-complement ()
   (interactive)
-  (f3--run-after-exit
-   (let ((f3--current-complement (not f3--current-complement))
-         (f3--match-buffers nil))
-     (f3--do helm-pattern t))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let ((f3--current-complement (not f3--current-complement))
+           (f3--match-buffers nil))
+       (f3--do pat t)))))
 
 (defun f3--attach-union ()
   (interactive)
-  (f3--run-after-exit
-   (let* ((f3--current-operator-stack
-          (cons (cons :or (f3--pattern-to-parsed-arg helm-pattern))
-                f3--current-operator-stack))
-          (f3--current-redo-stack f3--current-operator-stack)
-          (f3--temp-pattern nil)
-          (f3--match-buffers nil))
-     (f3--do))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let* ((f3--current-operator-stack
+             (cons (cons :or (f3--pattern-to-parsed-arg pat))
+                   f3--current-operator-stack))
+            (f3--current-redo-stack f3--current-operator-stack)
+            (f3--temp-pattern nil)
+            (f3--match-buffers nil))
+       (f3--do)))))
 
 (defun f3--attach-intersection ()
   (interactive)
-  (f3--run-after-exit
-   (let* ((f3--current-operator-stack
-           (cons (cons :and (f3--pattern-to-parsed-arg helm-pattern))
-                 f3--current-operator-stack))
-          (f3--current-redo-stack f3--current-operator-stack)
-          (f3--temp-pattern nil)
-          (f3--match-buffers nil))
-     (f3--do))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let* ((f3--current-operator-stack
+             (cons (cons :and (f3--pattern-to-parsed-arg pat))
+                   f3--current-operator-stack))
+            (f3--current-redo-stack f3--current-operator-stack)
+            (f3--temp-pattern nil)
+            (f3--match-buffers nil))
+       (f3--do)))))
 
 (defun f3--left-paren (pfx)
   (interactive "P")
-  (f3--run-after-exit
-   (let* ((f3--current-operator-stack
-           (cons (list :left-paren (when pfx :not)) f3--current-operator-stack))
-          (f3--current-redo-stack f3--current-operator-stack)
-          (f3--temp-pattern nil)
-          (f3--match-buffers nil))
-     (f3--do helm-pattern t))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let* ((f3--current-operator-stack
+             (cons (list :left-paren (when pfx :not))
+                   f3--current-operator-stack))
+            (f3--current-redo-stack f3--current-operator-stack)
+            (f3--temp-pattern nil)
+            (f3--match-buffers nil))
+       (f3--do pat t)))))
 
 (defun f3--right-paren (comb)
   (lambda ()
     (interactive)
-    (f3--run-after-exit
-     (let* ((f3--current-operator-stack
-             (append (list (cons comb :right-paren))
-                     (unless (string= helm-pattern "")
-                       (list
-                        (list :atom (f3--pattern-to-parsed-arg helm-pattern))))
-                     f3--current-operator-stack))
-            (f3--temp-pattern nil)
-            (f3--current-redo-stack f3--current-operator-stack)
-            (f3--match-buffers nil))
-       (f3--do)))))
+    (let ((pat helm-pattern))
+      (f3--run-after-exit
+       (let* ((f3--current-operator-stack
+               (append (list (cons comb :right-paren))
+                       (unless (string= pat "")
+                         (list
+                          (list :atom (f3--pattern-to-parsed-arg pat))))
+                       f3--current-operator-stack))
+              (f3--temp-pattern nil)
+              (f3--current-redo-stack f3--current-operator-stack)
+              (f3--match-buffers nil))
+         (f3--do))))))
 
 (defun f3--set-mindepth ()
   (interactive)
-  (f3--run-after-exit
-   (let* ((res (read-number "new mindepth: " (or f3--current-mindepth -1)))
-          (f3--current-mindepth (if (< res 0) nil res))
-          (f3--match-buffers nil))
-     (f3--do helm-pattern t))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let* ((res (read-number "new mindepth: " (or f3--current-mindepth -1)))
+            (f3--current-mindepth (if (< res 0) nil res))
+            (f3--match-buffers nil))
+       (f3--do pat t)))))
 
 (defun f3--set-maxdepth ()
   (interactive)
-  (f3--run-after-exit
-   (let* ((res (read-number "new maxdepth: " (or f3--current-maxdepth -1)))
-          (f3--current-maxdepth (if (< res 0) nil res))
-          (f3--match-buffers nil))
-     (f3--do helm-pattern t))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let* ((res (read-number "new maxdepth: " (or f3--current-maxdepth -1)))
+            (f3--current-maxdepth (if (< res 0) nil res))
+            (f3--match-buffers nil))
+       (f3--do pat t)))))
 
 (defun f3--find-next-stack-entry (start)
   (cl-loop with head = (f3--find-previous-text-pattern start)
@@ -613,13 +622,13 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
                     head2 (f3--find-previous-text-pattern (cdr head2)))
            finally return head))
 
-(defun f3--edit-current-stack-entry ()
+(defun f3--edit-current-stack-entry (pat)
   (let ((new-stack (f3--find-next-stack-entry f3--current-redo-stack)))
     (setf (car new-stack)
           (if (memq (caar new-stack) f3--combinators)
-              (cons (caar new-stack) (f3--pattern-to-parsed-arg helm-pattern))
+              (cons (caar new-stack) (f3--pattern-to-parsed-arg pat))
             (list (caar new-stack)
-                  (f3--pattern-to-parsed-arg helm-pattern))))))
+                  (f3--pattern-to-parsed-arg pat))))))
 
 (defun f3--find-previous-text-pattern (start)
   (cl-loop for head = start then (cdr head)
@@ -650,23 +659,24 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
         (t (let ((f3--current-mode (car link)))
              (f3--do (cl-second link) t)))))))
 
-(defun f3--do-undo ()
+(defun f3--do-undo (pat)
   (let ((new-head (f3--find-previous-text-pattern f3--current-operator-stack)))
     (let ((f3--current-operator-stack (cdr new-head)))
       (if new-head
           (f3--set-current-pattern-from-link (car new-head))
-        (f3--do helm-pattern t)))))
+        (f3--do pat t)))))
 
 (defun f3--undo ()
   (interactive)
-  (f3--run-after-exit
-   (if (eq f3--current-operator-stack f3--current-redo-stack)
-       (let ((f3--temp-pattern
-              (list (f3--pattern-to-parsed-arg helm-pattern)
-                    f3--current-operator-stack)))
-         (f3--do-undo))
-     (f3--edit-current-stack-entry)
-     (f3--do-undo))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (if (eq f3--current-operator-stack f3--current-redo-stack)
+         (let ((f3--temp-pattern
+                (list (f3--pattern-to-parsed-arg pat)
+                      f3--current-operator-stack)))
+           (f3--do-undo pat))
+       (f3--edit-current-stack-entry pat)
+       (f3--do-undo)))))
 
 (defun f3--find-next-text-pattern (start)
   (cl-loop with head = (f3--find-previous-text-pattern start)
@@ -685,29 +695,30 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--redo ()
   (interactive)
-  (f3--run-after-exit
-   (let* ((new-head
-           (and (not (eq f3--current-operator-stack
-                         f3--current-redo-stack))
-                (f3--find-next-text-pattern f3--current-redo-stack)))
-          (is-ready-for-temp-pattern
-           (and new-head
-                (and f3--temp-pattern
-                     (eq f3--current-operator-stack
-                         (f3--get-twice-previous-text-pattern
-                          f3--current-redo-stack)))))
-          (do-edit-stack-entry (not (null f3--current-operator-stack)))
-          (f3--current-operator-stack
-           (if new-head (cdr new-head) f3--current-operator-stack)))
-     (if new-head
-         (progn
-           (when do-edit-stack-entry (f3--edit-current-stack-entry))
-           (if is-ready-for-temp-pattern
-               (cl-destructuring-bind (pat f3--current-operator-stack)
-                   f3--temp-pattern
-                 (f3--set-current-pattern-from-link pat))
-             (f3--set-current-pattern-from-link (car new-head))))
-       (f3--do helm-pattern t)))))
+  (let ((pat helm-pattern))
+    (f3--run-after-exit
+     (let* ((new-head
+             (and (not (eq f3--current-operator-stack
+                           f3--current-redo-stack))
+                  (f3--find-next-text-pattern f3--current-redo-stack)))
+            (is-ready-for-temp-pattern
+             (and new-head
+                  (and f3--temp-pattern
+                       (eq f3--current-operator-stack
+                           (f3--get-twice-previous-text-pattern
+                            f3--current-redo-stack)))))
+            (do-edit-stack-entry (not (null f3--current-operator-stack)))
+            (f3--current-operator-stack
+             (if new-head (cdr new-head) f3--current-operator-stack)))
+       (if new-head
+           (progn
+             (when do-edit-stack-entry (f3--edit-current-stack-entry pat))
+             (if is-ready-for-temp-pattern
+                 (cl-destructuring-bind (pat f3--current-operator-stack)
+                     f3--temp-pattern
+                   (f3--set-current-pattern-from-link pat))
+               (f3--set-current-pattern-from-link (car new-head))))
+         (f3--do pat t))))))
 
 (defmacro f3--clear-session-variables (&rest body)
   `(let ((f3--current-mode f3-default-mode)
@@ -725,7 +736,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--bounce-to-raw ()
   (interactive)
   (let ((raw-cmd (mapconcat #'identity (f3--get-find-args) " ")))
-    (f3--save-previous-command)
+    (f3--save-previous-command helm-pattern)
     (f3--clear-session-variables
      (f3--run-after-exit
       (let ((f3--current-mode :raw))
