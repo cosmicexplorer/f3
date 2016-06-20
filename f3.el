@@ -89,34 +89,39 @@
 ;; Keybindings:
 
 ;; - combinators: these set 'f3-current-combinator' , take the current pattern
-;; as the find predicate, and clear the minibuffer ;; - 'M-+' = union ("or")
+;; as the find predicate, and clear the minibuffer
+;;   - 'M-+' = union ("or")
 ;;   - 'M-*' = intersection ("and")
 ;; - groupings: these add open or closed parentheses to the current find
-;; command and clear the minibuffer ;; - 'M-(' = open paren (will implicitly
-;; close any left at end)
+;; command and clear the minibuffer
+;;   - 'M-(' = open paren (will implicitly close any left at end)
 ;;   - 'C-u M-(' = open paren, with '-not' on
 ;;   - 'M-) M-+' = close paren / or (left parens will be implicitly added if
 ;;   needed)
 ;;   - 'M-) M-*' = close paren / and
 ;; - modes: these do NOT clear the minibuffer, just change the current 'find'
-;; predicate ;; - 'M-t' = normal text mode (not regex mode)
+;; predicate
+;;   - 'M-t' = normal text mode (not regex mode)
 ;;   - 'M-x' = regex mode
 ;;   - 'M-r' = "find" mode (just input raw find arguments)
 ;;   - 'M-f' = filetype ( 'b|c|d|f|l|p|s' )
 ;;   - 'M-p' = perm
 ;; - complement: this toggles whether '-not' is applied to the current
-;; predicate ;; - 'M-q' = toggle complement (current)
-;; - actions ;; - 'M-d' = exit helm and list the files in a 'find-dired'
-;; buffer
+;; predicate
+;;   - 'M-q' = toggle complement (current)
+;; - actions
+;;   - 'M-d' = exit helm and list the files in a 'find-dired' buffer
 ;;   - 'RET' = visit
 ;;   - 'TAB' = preview
 ;;   - 'M-b' = bounce to raw (can use 'M-R' afterwards to restore previous)
-;; - meta ;; - 'M-u' = undo whatever was just done
+;; - meta
+;;   - 'M-u' = undo whatever was just done
 ;;   - 'M-U' = redo
 ;;   - 'M-<' = set 'mindepth'
 ;;   - 'M->' = set 'maxdepth'
 ;;   - 'M-R' = restore from previous command
-;; - changing directories ;; - 'M-o' = start search from project root
+;; - changing directories
+;;   - 'M-o' = start search from project root
 ;;   - 'M-i' = start search from initial choice of 'default-directory'
 ;;   - 'M-c' = choose directory to search from, starting at whatever the
 ;; current

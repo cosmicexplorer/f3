@@ -20,13 +20,14 @@ processPara = (node) ->
   innerText = node[1..].map(processMarkdown).join(' ')
   processLines(innerText) + '\n'
 
-processBulletList = (node) -> node[1..].map(processBulletItem).join('\n') + '\n'
+processBulletList = (node) ->
+  '\n' + node[1..].map(processBulletItem).join('\n') + '\n'
 
 processBulletItem = (node) ->
   text = node[1..].map(processMarkdown).join(' ')
   processLines "- #{text}"
 
-processList = (node) -> node[1..].map(processListItem).join('\n') + '\n'
+processList = (node) -> '\n' + node[1..].map(processListItem).join('\n') + '\n'
 
 processListItem = (node, index) ->
   text = node[1..].map(processMarkdown).join(' ')
@@ -55,7 +56,7 @@ removeExtraComments = (s) ->
       str = new Array(insertionTextLength).join('  ')
       ";; #{str}")
     .replace(/([^; ]) +/g, (all, g1) -> "#{g1} ")
-    .replace(/(\n\n)+/g, '\n\n')
+    .replace(/\n(\n)+/g, '\n\n')
 
 licenseNodeFilter = (node) ->
   (not ((node[0] is 'header') and (node[2] is 'License'))) and
