@@ -348,12 +348,11 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 (defun f3--get-find-args ()
   (let ((final-pat (f3--get-ast)))
     (when final-pat
-      (let* ((args-minus-depth (f3--parsed-to-command final-pat))
-             (depth-args (f3--add-depths-to-args args-minus-depth)))
+      (let ((args (f3--parsed-to-command final-pat)))
         (with-current-buffer f3--source-buffer
-          (if f3-before-args
-              `("(" ,@f3-before-args ")" "-and" "(" ,@depth-args ")")
-            depth-args))))))
+          (f3--add-depths-to-args
+           (if f3-before-args `("(" ,@f3-before-args ")" "-and" "(" ,@args ")")
+             args)))))))
 
 (defun f3--empty-file (fname)
   (with-temp-buffer
