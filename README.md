@@ -77,7 +77,6 @@ Run `./update-commentary.el` in this directory to update the commentary section 
 - make M-R/C-M-R a stack instead of a single variable
 - make f3-default-directory be able to refer to a filename relative to a .dir-locals.el file or whatnot
 
-
 # License
 
 [GPL](GPL.md)
