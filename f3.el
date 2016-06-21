@@ -772,13 +772,34 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
              (f3--current-operator-stack redo-stack))
          (f3--set-current-pattern-from-link cur-pat))))))
 
+(defun f3--process-input-pattern (link)
+  (cond
+   ((symbolp link) "")
+   ((stringp link) link)
+   (t
+    (cl-case (car link)
+      (:and (f3--combine-and-patterns link))
+      (:not (concat "!" (f3--combine-and-patterns (cdr link))))
+      (t (if (assoc (car link) f3--input-modes)
+             (concat (cl-second link) " ")
+           (error "can't understand link %S" link)))))))
+
+(defun f3--combine-and-patterns (link)
+  (cl-reduce
+   (lambda (prev cur-link)
+     (concat prev (f3--process-input-pattern cur-link)))
+   (cdr link)
+   :initial-value ""))
+
 (defun f3--set-current-pattern-from-link (link &optional comp)
   (let ((f3--current-complement comp))
-    (if (memq (car link) f3--combinators)
-        (f3--set-current-pattern-from-link (cdr link))
+    (if (eq (car link) :and)
+        (let ((pats (replace-regexp-in-string
+                     "\\s-+\\'" "" (f3--combine-and-patterns link))))
+          (f3--do pats t))
       (cl-case (car link)
         (:not (f3--set-current-pattern-from-link (cl-second link) t))
-        (:atom (f3--set-current-pattern-from-link (cl-second link) comp))
+        (:atom (f3--set-current-pattern-from-link (cl-second link) t))
         (:raw (let ((f3--current-mode :raw))
                 (f3--do (mapconcat #'identity (cl-second link) " ") t)))
         (t (let ((f3--current-mode (car link)))
