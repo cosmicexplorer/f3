@@ -56,6 +56,8 @@ removeExtraComments = (s) ->
       str = new Array(insertionTextLength).join('  ')
       ";; #{str}")
     .replace(/([^; ]) +/g, (all, g1) -> "#{g1} ")
+    .replace(/ +([\.,])/g, (all, g1) -> g1)
+    .replace(/^(;+)([^; ])/gm, (all, g1, g2) -> "#{g1} #{g2}")
     .replace(/\n(\n)+/g, '\n\n')
 
 licenseNodeFilter = (node) ->

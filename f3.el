@@ -26,7 +26,7 @@
 ;; The first is usually solved in IDEs by maintaining an index of all files in
 ;; the project. However, this requires that the project be of a type that the
 ;; IDE supports. The second is usually solved through a mixture of trial and
-;; error, and occasionally the use of 'find -exec' . However, as 'find' is a
+;; error, and occasionally the use of 'find -exec'. However, as 'find' is a
 ;; complex command which supports many different search options, it is often
 ;; difficult to perform this process efficiently, and if 'find' is not used,
 ;; it can be time consuming and error-prone to specify a file list manually.
@@ -46,8 +46,8 @@
 ;; process which will intelligently use the minibuffer input to search file
 ;; paths in the current project. By default, 'f3' attempts to detect the
 ;; project root; the method by which it does this can be customized by the
-;; variable 'f3-default-directory' . Files which 'find' ignores can be
-;; customized with the variable 'f3-before-args' . 'RET' visits the currently
+;; variable 'f3-default-directory'. Files which 'find' ignores can be
+;; customized with the variable 'f3-before-args'. 'RET' visits the currently
 ;; selected file, and 'TAB' previews the file, killing it after the helm
 ;; session is quit.
 
@@ -67,15 +67,15 @@
 ;; When attempting to perform mass operations on files, more search complexity
 ;; is often desired. 'find' offers a series of predicates and algebraic
 ;; operators to narrow down search results. Predicates supported by 'f3'
-;; include '-[i]path' , '-[i]regex' , '-type' , '-perm' , and also a "raw"
+;; include '-[i]path', '-[i]regex', '-type', '-perm', and also a "raw"
 ;; mode which allows inputting arbitrary find arguments verbatim. This is
 ;; useful for when the interface offered by 'f3' becomes too simplistic.
 
 ;; In addition to simple predicates, 'find' offers operators which combine
 ;; the results of multiple searches in different ways. The operators (sometimes
 ;; called "combinators" in this documentation) supported by 'f3' are '-and'
-;; , '-or' , and parentheses. These are entered mnemonically as 'M-*' ,
-;; 'M-+' , and 'M-(' / 'M-)' , respectively. In this way, a more complex query
+;; , '-or', and parentheses. These are entered mnemonically as 'M-*',
+;; 'M-+', and 'M-(' / 'M-)', respectively. In this way, a more complex query
 ;; can be built up. 'M-u' and 'M-U' can "undo" and "redo" pattern inputs,
 ;; allowing for modification of the find command without having to start again
 ;; from scratch.
@@ -88,7 +88,7 @@
 
 ;; Keybindings:
 
-;; - combinators: these set 'f3-current-combinator' , take the current pattern
+;; - combinators: these set 'f3-current-combinator', take the current pattern
 ;; as the find predicate, and clear the minibuffer
 ;;   - 'M-+' = union ("or")
 ;;   - 'M-*' = intersection ("and")
