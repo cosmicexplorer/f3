@@ -59,6 +59,7 @@ When the results shown interactively in the helm buffer appear to match what is 
     - <kbd>M-<</kbd> = set `mindepth`
     - <kbd>M-></kbd> = set `maxdepth`
     - <kbd>M-R</kbd> = restore from previous command
+    - <kbd>C-M-R</kbd> = undo restore (move up and down a previous command stack)
 - changing directories
     - <kbd>M-o</kbd> = start search from project root
     - <kbd>M-i</kbd> = start search from initial choice of `default-directory`

@@ -120,6 +120,7 @@
 ;;   - 'M-<' = set 'mindepth'
 ;;   - 'M->' = set 'maxdepth'
 ;;   - 'M-R' = restore from previous command
+;;   - 'C-M-R' = undo restore (move up and down a previous command stack)
 ;; - changing directories
 ;;   - 'M-o' = start search from project root
 ;;   - 'M-i' = start search from initial choice of 'default-directory'
@@ -224,9 +225,9 @@ and returning a directory path."
 
 
 ;; Global variables
-(defvar f3--current-mode)
+(defvar f3--current-mode nil)
 
-(defvar f3--current-complement)
+(defvar f3--current-complement nil)
 
 (defvar f3--match-buffers t
   "Whether to match buffers as well as async find results. Starts on, turned off
@@ -273,6 +274,7 @@ are killed at the end of a session.")
 (defvar f3--temp-pattern nil)
 
 (defvar f3--prev-stack-and-cur nil)
+(defvar f3--full-saved-stack nil)
 
 (defvar f3--temp-err-file nil)
 
@@ -560,16 +562,17 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           real-proc)))))
 
 (defun f3--save-previous-command (pat)
-  (setq f3--prev-stack-and-cur
-        (list f3--current-redo-stack
-              (f3--pattern-to-parsed-arg pat))))
+  (push
+   (list f3--current-redo-stack
+         (f3--pattern-to-parsed-arg pat))
+   f3--prev-stack-and-cur)
+  (setq f3--full-saved-stack f3--prev-stack-and-cur))
 
 (defun f3--clear-opened-persistent-buffers ()
   (cl-mapc #'kill-buffer f3--currently-opened-persistent-buffers)
   (setq f3--currently-opened-persistent-buffers nil))
 
 (defun f3--cleanup ()
-  (f3--save-previous-command helm-pattern)
   (f3--clear-opened-persistent-buffers))
 
 (defun f3--remove-temp-err-file ()
@@ -599,7 +602,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
   (f3--buffer-persistent-action (f3--async-display-to-real cand t)))
 
 (defun f3--async-action (cand)
-  (f3--sync-action (f3--async-display-to-real cand)))
+  (f3--sync-action (f3--async-display-to-real cand))
+  (f3--save-previous-command helm-pattern))
 
 (defun f3--find-base-files (dir)
   (cl-some
@@ -764,13 +768,24 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--restore-from-previous-command ()
   (interactive)
-  (when f3--prev-stack-and-cur
-    (cl-destructuring-bind (redo-stack cur-pat)
-        f3--prev-stack-and-cur
-      (f3--run-after-exit
-       (let ((f3--current-redo-stack redo-stack)
-             (f3--current-operator-stack redo-stack))
-         (f3--set-current-pattern-from-link cur-pat))))))
+  (let ((res (pop f3--prev-stack-and-cur)))
+    (if (not res) (error "no more undo-restorations available")
+      (cl-destructuring-bind (redo-stack cur-pat) res
+        (f3--run-after-exit
+         (let ((f3--current-redo-stack redo-stack)
+               (f3--current-operator-stack redo-stack))
+           (f3--set-current-pattern-from-link cur-pat)))))))
+
+(defun f3--redo-restore-from-previous-command ()
+  (interactive)
+  (unless (eq f3--full-saved-stack f3--prev-stack-and-cur)
+    (let ((res (cl-loop for head = f3--full-saved-stack then (cdr head)
+                        until (eq (cddr head) f3--prev-stack-and-cur)
+                        do (when (null head)
+                             (error "no more redo-restorations available"))
+                        finally return head)))
+      (setq f3--prev-stack-and-cur res)
+      (f3--restore-from-previous-command))))
 
 (defun f3--process-input-pattern (link)
   (cond
@@ -792,18 +807,22 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
    :initial-value ""))
 
 (defun f3--set-current-pattern-from-link (link &optional comp)
+  (message "link: %S" link)
   (let ((f3--current-complement comp))
     (if (eq (car link) :and)
         (let ((pats (replace-regexp-in-string
                      "\\s-+\\'" "" (f3--combine-and-patterns link))))
           (f3--do pats t))
-      (cl-case (car link)
-        (:not (f3--set-current-pattern-from-link (cl-second link) t))
-        (:atom (f3--set-current-pattern-from-link (cl-second link) t))
-        (:raw (let ((f3--current-mode :raw))
-                (f3--do (mapconcat #'identity (cl-second link) " ") t)))
-        (t (let ((f3--current-mode (car link)))
-             (f3--do (cl-second link) t)))))))
+      (cond
+       ((memq (car link) f3--combinators)
+        (f3--set-current-pattern-from-link (cdr link)))
+       (t (cl-case (car link)
+            (:not (f3--set-current-pattern-from-link (cl-second link) t))
+            (:atom (f3--set-current-pattern-from-link (cl-second link) t))
+            (:raw (let ((f3--current-mode :raw))
+                    (f3--do (mapconcat #'identity (cl-second link) " ") t)))
+            (t (let ((f3--current-mode (car link)))
+                 (f3--do (cl-second link) t)))))))))
 
 (defun f3--do-undo (pat)
   (let ((new-head (f3--find-previous-text-pattern f3--current-operator-stack)))
@@ -946,6 +965,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "M-b") #'f3--bounce-to-raw)
     (define-key map (kbd "M-d") #'f3--dump-to-dired)
     (define-key map (kbd "M-R") #'f3--restore-from-previous-command)
+    (define-key map (kbd "C-M-R") #'f3--redo-restore-from-previous-command)
     map)
   "Keymap for `f3'.")
 
@@ -953,6 +973,10 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 ;; Autoloaded functions
 ;;;###autoload
 (defun f3 (start-dir)
+  "Find files quickly. Use combinators to put together complex queries and
+\\[f3--dump-to-dired] to bounce the results to a dired buffer.
+
+\\{f3-map}"
   (interactive (list (f3--choose-dir)))
   (let ((f3--source-buffer (current-buffer))
         (f3--temp-err-file (make-temp-file "emacs-f3")))
