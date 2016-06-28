@@ -331,8 +331,8 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
       (lambda (pat)
         (cl-destructuring-bind (pred . reg) pat
           (if (eq pred 'identity)
-              `(:regex ,real-reg)
-            `(:not (:regex ,real-reg)))))
+              `(:regex ,reg)
+            `(:not (:regex ,reg)))))
       texts))))
 
 (defun f3--create-raw-pattern (pat)
