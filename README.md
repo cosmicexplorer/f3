@@ -80,4 +80,4 @@ Run `./update-commentary.el` in this directory to update the commentary section 
 
 # License
 
-[GPL](GPL.md)
+[GPL 3.0+](./LICENSE)

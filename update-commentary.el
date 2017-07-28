@@ -1,8 +1,14 @@
 #!/bin/sh
 :;exec emacs -batch -l "$0" -- "$@"
 
-(defconst search-regexp "\\(;;; Commentary:\\)\\(?:[[:ascii:]]*?\\)\\(;; End Commentary\\)")
-(with-current-buffer (find-file "f3.el")
+(defconst search-regexp
+  (format "\\(%s\\)\\(?:%s\\)\\(%s\\)"
+          ";;; Commentary:"
+          "[[:ascii:]]*?"
+          ";; End Commentary"))
+(defconst target-file "f3.el")
+
+(with-current-buffer (find-file target-file)
   (re-search-forward search-regexp)
   (replace-match "\\1\n\\2")
   (save-buffer)

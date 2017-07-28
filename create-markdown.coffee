@@ -60,15 +60,11 @@ removeExtraComments = (s) ->
     .replace(/^(;+)([^; ])/gm, (all, g1, g2) -> "#{g1} #{g2}")
     .replace(/\n(\n)+/g, '\n\n')
 
-licenseNodeFilter = (node) ->
-  (not ((node[0] is 'header') and (node[2] is 'License'))) and
-    (not ((node[0] is 'para') and (node[1][2] is 'GPL')))
-
 link = "https://github.com/cosmicexplorer/f3"
 header = ";; The below is generated from a README at\n;; #{link}.\n"
 
 processTree = (tree) ->
-  text = tree[2..].filter(licenseNodeFilter).map(processMarkdown).join('\n')
+  text = tree[2..].map(processMarkdown).join('\n')
   removeExtraComments(text).replace(/\n+$/g, '')
 
 readme = fs.readFileSync("#{__dirname}/README.md").toString()
