@@ -72,11 +72,11 @@ Run `./update-commentary.el` in this directory to update the commentary section 
 
 # Further Work
 
+- add docstrings containing the info in this readme
 - show state of undo/redo in some readable way
-- fix highlighting of results in helm and highlighting of previews; maybe use some logic in ; `f3--filter-buffer-candidates'?
-- add readme to commentary section
-- make M-R/C-M-R a stack instead of a single variable
-- make f3-default-directory be able to refer to a filename relative to a .dir-locals.el file or whatnot
+    - also consider making it a traversable tree like emacs's `undo-tree`
+- fix highlighting of results in helm and highlighting of previews
+    - maybe use some logic in `f3--filter-buffer-candidates'?
 
 # License
 
