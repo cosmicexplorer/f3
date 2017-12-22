@@ -250,27 +250,29 @@ and returning a directory path."
   "Whether to match buffers as well as async find results. Starts on, turned off
 within a session after a combinator is used.")
 
-(defvar f3--buffer-source
+(defconst f3--buffer-source
   (helm-build-sync-source "open buffers"
     :candidates #'f3--get-buffer-names
     :match-strict #'f3--filter-buffer-candidates
     :candidate-number-limit f3--candidate-limit
     :action (helm-make-actions "Visit" #'f3--sync-action)
-    :persistent-action #'f3--buffer-persistent-action)
+    :persistent-action #'f3--buffer-persistent-action
+    :keymap f3-map)
   "Source searching currently open buffer names for results.")
 
 (defvar f3--currently-opened-persistent-buffers nil
   "The buffers opened through a persistent action within an `f3' session. These
 are killed at the end of a session.")
 
-(defvar f3--find-process-source
+(defconst f3--find-process-source
   (helm-build-async-source "find"
     :candidates-process #'f3--make-process
     :candidate-number-limit f3--candidate-limit
     :action (helm-make-actions "Visit" #'f3--async-action)
     :persistent-action #'f3--async-persistent-action
     :filter-one-by-one #'f3--async-filter-function
-    :cleanup #'f3--cleanup)
+    :cleanup #'f3--cleanup
+    :keymap f3-map)
   "Source searching files within a given directory using the find command.")
 
 (defvar f3--last-selected-candidate nil
@@ -556,27 +558,26 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
 
 (defun f3--make-process ()
   (let ((args (f3--get-find-args)))
-    (when args
-      (with-current-buffer f3--source-buffer
-        ;; n.b.: `f3--async-filter-function' depends upon the "." literal
-        (let* ((all-args `(,f3-find-program "." ,@args))
-               (default-directory f3--cached-dir)
-               (err-proc (f3--restart-err-proc))
-               (real-proc (f3--make-find-process all-args))
-               (err-filter-sentinel
-                (lambda (proc ev)
-                  (f3--signal-results-on-err real-proc proc ev))))
-          (set-process-filter err-proc err-filter-sentinel)
-          (set-process-sentinel err-proc #'ignore)
-          (set-process-query-on-exit-flag err-proc nil)
-          (set-process-query-on-exit-flag real-proc nil)
-          (set-process-filter
-           real-proc (lambda (proc ev) (delete-process err-proc)))
-          (helm-attrset
-           'name
-           (format "%s: %s" f3--cached-dir (mapconcat #'identity all-args " "))
-           f3--find-process-source)
-          real-proc)))))
+    (with-current-buffer f3--source-buffer
+      ;; n.b.: `f3--async-filter-function' depends upon the "." literal
+      (let* ((all-args `(,f3-find-program "." ,@args))
+             (default-directory f3--cached-dir)
+             (err-proc (f3--restart-err-proc))
+             (real-proc (f3--make-find-process all-args))
+             (err-filter-sentinel
+              (lambda (proc ev)
+                (f3--signal-results-on-err real-proc proc ev))))
+        (set-process-filter err-proc err-filter-sentinel)
+        (set-process-sentinel err-proc #'ignore)
+        (set-process-query-on-exit-flag err-proc nil)
+        (set-process-query-on-exit-flag real-proc nil)
+        (set-process-filter
+         real-proc (lambda (proc ev) (delete-process err-proc)))
+        (helm-attrset
+         'name
+         (format "%s: %s" f3--cached-dir (mapconcat #'identity all-args " "))
+         f3--find-process-source)
+        real-proc))))
 
 (defun f3--save-previous-command (pat)
   (push
@@ -950,8 +951,7 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
           :buffer f3--helm-buffer-name
           :input (or initial-input "")
           :preselect last-cand
-          :prompt prompt
-          :keymap f3-map)))
+          :prompt prompt)))
 
 
 ;; Keymaps
