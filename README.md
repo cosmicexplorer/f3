@@ -36,9 +36,11 @@ When the results shown interactively in the helm buffer appear to match what is 
     - <kbd>M-+</kbd> = union ("or")
     - <kbd>M-*</kbd> = intersection ("and")
 - groupings: these add open or closed parentheses to the current find command and clear the minibuffer
-    - <kbd>M-(</kbd> = open paren (will implicitly close any left at end)
+    - <kbd>M-(</kbd> = open paren
+        - `f3` will implicitly close any remaining open parens by adding `)` to the end of the `find` command line produced
     - <kbd>C-u M-(</kbd> = open paren, with `-not` on
-    - <kbd>M-) M-+</kbd> = close paren / or (left parens will be implicitly added if needed)
+    - <kbd>M-) M-+</kbd> = close paren / or
+        - if there are no unclosed `)`, they will be implicitly added
     - <kbd>M-) M-*</kbd> = close paren / and
 - modes: these do NOT clear the minibuffer, just change the current `find` predicate
     - <kbd>M-t</kbd> = normal text mode (not regex mode)
