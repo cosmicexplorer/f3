@@ -257,7 +257,7 @@ within a session after a combinator is used.")
     :candidate-number-limit f3--candidate-limit
     :action (helm-make-actions "Visit" #'f3--sync-action)
     :persistent-action #'f3--buffer-persistent-action
-    :keymap f3-map)
+    :keymap 'f3-map)
   "Source searching currently open buffer names for results.")
 
 (defvar f3--currently-opened-persistent-buffers nil
@@ -272,7 +272,7 @@ are killed at the end of a session.")
     :persistent-action #'f3--async-persistent-action
     :filter-one-by-one #'f3--async-filter-function
     :cleanup #'f3--cleanup
-    :keymap f3-map)
+    :keymap 'f3-map)
   "Source searching files within a given directory using the find command.")
 
 (defvar f3--last-selected-candidate nil
