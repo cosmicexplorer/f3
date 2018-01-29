@@ -250,30 +250,9 @@ and returning a directory path."
   "Whether to match buffers as well as async find results. Starts on, turned off
 within a session after a combinator is used.")
 
-(defconst f3--buffer-source
-  (helm-build-sync-source "open buffers"
-    :candidates #'f3--get-buffer-names
-    :match-strict #'f3--filter-buffer-candidates
-    :candidate-number-limit f3--candidate-limit
-    :action (helm-make-actions "Visit" #'f3--sync-action)
-    :persistent-action #'f3--buffer-persistent-action
-    :keymap 'f3-map)
-  "Source searching currently open buffer names for results.")
-
 (defvar f3--currently-opened-persistent-buffers nil
   "The buffers opened through a persistent action within an `f3' session. These
 are killed at the end of a session.")
-
-(defconst f3--find-process-source
-  (helm-build-async-source "find"
-    :candidates-process #'f3--make-process
-    :candidate-number-limit f3--candidate-limit
-    :action (helm-make-actions "Visit" #'f3--async-action)
-    :persistent-action #'f3--async-persistent-action
-    :filter-one-by-one #'f3--async-filter-function
-    :cleanup #'f3--cleanup
-    :keymap 'f3-map)
-  "Source searching files within a given directory using the find command.")
 
 (defvar f3--last-selected-candidate nil
   "Buffer which was last selected through `f3'.")
@@ -985,6 +964,29 @@ side (as denoted by lists START-ANCHORS and END-ANCHORS)."
     (define-key map (kbd "C-M-R") #'f3--redo-restore-from-previous-command)
     map)
   "Keymap for `f3'.")
+
+
+;; Helm sources
+(defconst f3--buffer-source
+  (helm-build-sync-source "open buffers"
+    :candidates #'f3--get-buffer-names
+    :match-strict #'f3--filter-buffer-candidates
+    :candidate-number-limit f3--candidate-limit
+    :action (helm-make-actions "Visit" #'f3--sync-action)
+    :persistent-action #'f3--buffer-persistent-action
+    :keymap 'f3-map)
+  "Source searching currently open buffer names for results.")
+
+(defconst f3--find-process-source
+  (helm-build-async-source "find"
+    :candidates-process #'f3--make-process
+    :candidate-number-limit f3--candidate-limit
+    :action (helm-make-actions "Visit" #'f3--async-action)
+    :persistent-action #'f3--async-persistent-action
+    :filter-one-by-one #'f3--async-filter-function
+    :cleanup #'f3--cleanup
+    :keymap 'f3-map)
+  "Source searching files within a given directory using the find command.")
 
 
 ;; Autoloaded functions
