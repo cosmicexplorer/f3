@@ -12,9 +12,10 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-;; Author: Danny McClanahan <danieldmcclanahan@gmail.com>
+;; Author: Danny McClanahan
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24") (helm "1.9.6") (cl-lib "0.5"))
+;; URL: https://github.com/cosmicexplorer/f3
+;; Package-Requires: ((emacs "24.3") (helm "2.8.8") (cl-lib "0.5"))
 ;; Keywords: find, file, files, helm, fast, finder
 
 
