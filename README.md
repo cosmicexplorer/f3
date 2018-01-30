@@ -1,7 +1,7 @@
 f<sup>3</sup>
 =============
 
-The Fantastic File Finder for emacs. Find files fast, using helm. It's cool, trust me.
+The Fantastic File Finder for emacs. Find files fast, using [`helm`](https://github.com/emacs-helm/helm). It's cool, trust me.
 
 # Motivation
 
@@ -10,7 +10,7 @@ There are many file operations that are difficult to perform without specialized
 1. Finding a particular file by name in a large project.
 2. Performing operations of arbitrary complexity on many files at once.
 
-The first is usually solved in IDEs by maintaining an index of all files in the project. However, this requires that the project be of a type that the IDE supports. The second is usually solved through a mixture of trial and error, and occasionally the use of `find -exec`. However, as `find` is a complex command which supports many different search options, it is often difficult to perform this process efficiently, and if `find` is not used, it can be time consuming and error-prone to specify a file list manually. This package provides an interactive interface to the `find` utility using [helm](https://github.com/emacs-helm/helm) as a frontend to solve both of these problems quickly so you can get back to work and stop playing around with the command line.
+The first is usually solved in IDEs by maintaining an index of all files in the project. However, this requires that the project be of a type that the IDE supports. The second is usually solved through a mixture of trial and error, and occasionally the use of `find -exec`. However, as `find` is a complex command which supports many different search options, it is often difficult to perform this process efficiently, and if `find` is not used, it can be time consuming and error-prone to specify a file list manually. This package provides an interactive interface to the `find` utility using helm as a frontend to solve both of these problems quickly so you can get back to work and stop playing around with the command line.
 
 # Usage
 
